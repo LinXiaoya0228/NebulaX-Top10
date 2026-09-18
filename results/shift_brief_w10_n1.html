@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>2 AM WORKS CONTROLLER SHIFT HANDOVER BRIEFING - Wk 10 N1</title>
+<style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #08111F; color: #F8FAFC; margin: 0; padding: 24px; }
+    .container { max-width: 1000px; margin: 0 auto; background: #111C2E; border-radius: 8px; border: 1px solid #25334A; padding: 32px; }
+    h1 { color: #22D3EE; margin-top: 0; font-size: 24px; border-bottom: 2px solid #25334A; padding-bottom: 12px; }
+    .meta-bar { display: flex; justify-content: space-between; font-size: 13px; color: #94A3B8; margin-bottom: 24px; }
+    .kpi-row { display: flex; gap: 16px; margin-bottom: 24px; }
+    .kpi-card { flex: 1; background: #18263E; border: 1px solid #25334A; border-radius: 6px; padding: 16px; text-align: center; }
+    .kpi-val { font-size: 28px; font-weight: bold; color: #38BDF8; }
+    .kpi-lbl { font-size: 12px; color: #94A3B8; text-transform: uppercase; margin-top: 4px; }
+    .alert-box { background: rgba(244, 63, 94, 0.15); border-left: 4px solid #F43F5E; padding: 12px 16px; margin-bottom: 12px; border-radius: 4px; font-size: 13px; line-height: 1.5; }
+    table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 13px; }
+    th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #25334A; }
+    th { background: #18263E; color: #94A3B8; font-weight: 600; text-transform: uppercase; font-size: 11px; }
+    .badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+    .badge.live { background: rgba(244, 63, 94, 0.25); color: #FB7185; }
+    .badge.nl { background: rgba(148, 163, 184, 0.2); color: #94A3B8; }
+    .badge.eclo { background: rgba(245, 158, 11, 0.25); color: #FBBF24; margin-left: 4px; }
+    .badge.cs { background: rgba(56, 189, 248, 0.2); color: #38BDF8; }
+    ul.checklist { list-style: none; padding-left: 0; }
+    ul.checklist li { padding: 8px 0; border-bottom: 1px solid #1E293B; font-size: 13px; }
+    @media print { body { background: #fff; color: #000; } .container { border: none; padding: 0; } }
+</style>
+</head>
+<body>
+<div class="container">
+    <h1>2 AM WORKS CONTROLLER SHIFT HANDOVER BRIEFING</h1>
+    <div class="meta-bar">
+        <span><b>Shift:</b> Night Shift (22:00 - 05:00 hrs) | <b>Week:</b> 10 | <b>Night:</b> 1</span>
+        <span><b>Generated:</b> 2026-09-19 04:22:09 | <b>Mode:</b> Scenario A</span>
+    </div>
+
+    <div class="kpi-row">
+        <div class="kpi-card"><div class="kpi-val">7</div><div class="kpi-lbl">Active Works</div></div>
+        <div class="kpi-card"><div class="kpi-val" style="color: #FB7185;">0</div><div class="kpi-lbl">Live Power Zones</div></div>
+        <div class="kpi-card"><div class="kpi-val" style="color: #FBBF24;">0</div><div class="kpi-lbl">ECLO Works</div></div>
+        <div class="kpi-card"><div class="kpi-val">1</div><div class="kpi-lbl">Co-Share Possessions</div></div>
+    </div>
+
+    <h3>Safety & Isolation Protocols</h3>
+    <div class='alert-box'>⚠️ MANDATORY COLLISION BUFFERS: Non-live consist movements active. Verify 1-sector advance buffer clearance with signalling dispatch.</div>
+
+    <h3>Tonight's Track Possessions</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Activity</th>
+                <th>Contract</th>
+                <th>Line/Bound</th>
+                <th>Work Span</th>
+                <th>Type</th>
+                <th>Nature</th>
+                <th>Possession Slot</th>
+            </tr>
+        </thead>
+        <tbody>
+            
+            <tr>
+                <td><b>A025</b></td>
+                <td>C004<br><small>Renewal programme 4</small></td>
+                <td>ALP EB</td>
+                <td>SEC:ALP:S01_S02:EB -> SEC:ALP:S02_S03:EB</td>
+                <td>PC</td>
+                <td><span class='badge nl'>Non-live</span> </td>
+                <td><span class='badge cs'>Co-Share (A028, A038, A039, A046, A049, A061, A069)</span></td>
+            </tr>
+            
+            <tr>
+                <td><b>A028</b></td>
+                <td>C005<br><small>Renewal programme 5</small></td>
+                <td>ALP EB</td>
+                <td>SEC:ALP:S03_S04:EB -> SEC:ALP:S04_H01:EB</td>
+                <td>PC</td>
+                <td><span class='badge nl'>Non-live</span> </td>
+                <td><span class='badge cs'>Co-Share (A025, A038, A039, A046, A049, A061, A069)</span></td>
+            </tr>
+            
+            <tr>
+                <td><b>A038</b></td>
+                <td>C006<br><small>Construction programme 6</small></td>
+                <td>BET EB</td>
+                <td>SEC:BET:S17_S18:EB -> SEC:BET:S17_S18:EB</td>
+                <td>C</td>
+                <td><span class='badge nl'>Non-live</span> </td>
+                <td><span class='badge cs'>Co-Share (A025, A028, A039, A046, A049, A061, A069)</span></td>
+            </tr>
+            
+            <tr>
+                <td><b>A046</b></td>
+                <td>C007<br><small>Renewal programme 7</small></td>
+                <td>ALP WB</td>
+                <td>SEC:ALP:S05_S06:WB -> SEC:ALP:S05_S06:WB</td>
+                <td>C</td>
+                <td><span class='badge nl'>Non-live</span> </td>
+                <td><span class='badge cs'>Co-Share (A025, A028, A038, A039, A049, A061, A069)</span></td>
+            </tr>
+            
+            <tr>
+                <td><b>A049</b></td>
+                <td>C008<br><small>Renewal programme 8</small></td>
+                <td>BET WB</td>
+                <td>SEC:BET:H02_S15:WB -> SEC:BET:S15_S16:WB</td>
+                <td>C</td>
+                <td><span class='badge nl'>Non-live</span> </td>
+                <td><span class='badge cs'>Co-Share (A025, A028, A038, A039, A046, A061, A069)</span></td>
+            </tr>
+            
+            <tr>
+                <td><b>A061</b></td>
+                <td>C010<br><small>Construction programme 10</small></td>
+                <td>BET EB</td>
+                <td>SEC:BET:H01_H02:EB -> SEC:BET:H02_S15:EB</td>
+                <td>C</td>
+                <td><span class='badge nl'>Non-live</span> </td>
+                <td><span class='badge cs'>Co-Share (A025, A028, A038, A039, A046, A049, A069)</span></td>
+            </tr>
+            
+            <tr>
+                <td><b>A069</b></td>
+                <td>C011<br><small>Renewal programme 11</small></td>
+                <td>ALP WB</td>
+                <td>SEC:ALP:S03_S04:WB -> SEC:ALP:H01_H02:WB</td>
+                <td>C</td>
+                <td><span class='badge nl'>Non-live</span> </td>
+                <td><span class='badge cs'>Co-Share (A025, A028, A038, A039, A046, A049, A061)</span></td>
+            </tr>
+            
+        </tbody>
+    </table>
+
+    <h3 style="margin-top: 28px;">2 AM Controller Action Checklist</h3>
+    <ul class="checklist">
+        <li><input type='checkbox'> [02:00] Confirm traction power isolation certificates for Live catenary zones.</li><li><input type='checkbox'> [02:15] Verify all possession boundaries and physical derailer/buffer placements.</li><li><input type='checkbox'> [02:30] Check contractor personnel sign-in and safety briefing logs.</li><li><input type='checkbox'> [04:15] Initiate 45-minute track clearance countdown and tool recovery verification.</li><li><input type='checkbox'> [04:45] Confirm track sweep train dispatch and signaling interlock restoration.</li><li><input type='checkbox'> [05:00] Complete Works Controller handover log and sign off to Day Controller.</li>
+    </ul>
+</div>
+</body>
+</html>

@@ -79,57 +79,144 @@ class ScheduleExporter:
 
 
 class AccessNightAssigner:
-    """Assigns local access_night per (contract_number, week) satisfying workfronts."""
+    """Assigns local access_night per (contract_number, week) with spatial/buffer conflict staggering."""
 
     @staticmethod
     def assign_nights(dm: DataMall, scheduled_weeks: Dict[str, List[Dict[str, int]]]) -> List[Dict[str, Any]]:
         """
         scheduled_weeks: aid -> list of {'week': w, 'eclo': 0/1}
         Returns list of access records with access_seq and access_night.
+        Staggers activities scheduled in the same week that have spatial/buffer conflicts
+        onto separate access_nights within each contract's maximum allowed nights.
         """
-        records = []
-        # Group by (contract, week)
-        contract_week_acts: Dict[Tuple[str, int], List[Tuple[str, int, int]]] = defaultdict(list)
-
+        # Group accesses by week
+        week_accesses: Dict[int, List[Tuple[str, int, int]]] = defaultdict(list)
         for aid, accesses in scheduled_weeks.items():
-            cid = dm.activities[aid].contract_number
             for seq_idx, acc in enumerate(accesses, start=1):
-                wk = acc["week"]
-                eclo = acc["eclo"]
-                contract_week_acts[(cid, wk)].append((aid, seq_idx, eclo))
+                week_accesses[acc["week"]].append((aid, seq_idx, acc["eclo"]))
 
-        for (cid, wk), act_list in contract_week_acts.items():
-            contract = dm.contracts[cid]
-            max_access = contract.number_of_maximum_access_per_week
-            max_wf = contract.number_of_workfronts
+        records = []
+        for wk in sorted(week_accesses.keys()):
+            act_items = week_accesses[wk]
+            aids = [item[0] for item in act_items]
+            acts = {a: dm.activities[a] for a in aids}
+            contracts = {a: dm.contracts[acts[a].contract_number] for a in aids}
+            fps = {a: dm.get_safety_footprint(a) for a in aids}
 
-            # Round-robin or bin-pack activities into access_nights 1..max_access
-            # Each night can host up to max_wf activities
-            night_bins: List[List[Tuple[str, int, int]]] = [[] for _ in range(max_access)]
-            bin_idx = 0
-            for item in act_list:
-                # Find first bin with space
-                placed = False
-                for attempt in range(max_access):
-                    target_b = (bin_idx + attempt) % max_access
-                    if len(night_bins[target_b]) < max_wf:
-                        night_bins[target_b].append(item)
-                        bin_idx = (target_b + 1) % max_access
-                        placed = True
-                        break
-                if not placed:
-                    # Fallback
-                    night_bins[0].append(item)
+            # Build pairwise conflict graph for activities in this week
+            # Note: access_night is a LOCAL accounting index per (contract_number, activity_type, week).
+            # Different contracts have independent access_night namespaces; cross-contract possession
+            # grouping is governed by (location_id, week, co_share_group).
+            conflicts = set()
+            for i in range(len(aids)):
+                for j in range(i + 1, len(aids)):
+                    a1, a2 = aids[i], aids[j]
+                    # Only activities of the same contract share the local access_night namespace
+                    if acts[a1].contract_number != acts[a2].contract_number:
+                        continue
 
-            for night_num, items in enumerate(night_bins, start=1):
-                for (aid, seq_idx, eclo) in items:
-                    records.append({
-                        "activity_id": aid,
-                        "access_seq": seq_idx,
-                        "week": wk,
-                        "eclo": eclo,
-                        "access_night": night_num,
-                    })
+                    fp1, fp2 = fps[a1], fps[a2]
+                    w1, b1 = fp1["work_span"], fp1["buffer_locations"]
+                    w2, b2 = fp2["work_span"], fp2["buffer_locations"]
+                    m1, c1 = fp1["mirror_locations"], fp1["cross_line_locations"]
+                    m2, c2 = fp2["mirror_locations"], fp2["cross_line_locations"]
+
+                    t1, t2 = contracts[a1].access_type, contracts[a2].access_type
+                    can_coshare = (
+                        acts[a1].line_code == acts[a2].line_code and
+                        acts[a1].bound == acts[a2].bound and
+                        w1 == w2 and
+                        t1 in ("PC", "C") and t2 in ("PC", "C") and
+                        not (t1 == "PC" and t2 == "PC")
+                    )
+
+                    has_work_in_buf = bool((w1 & b2) or (w2 & b1))
+                    has_buf_overlap = bool(b1 & b2)
+                    has_mirror_hit = bool((w1 & m2) or (w2 & m1) or (w1 & c2) or (w2 & c1))
+                    has_work_overlap = bool(w1 & w2)
+
+                    if has_mirror_hit:
+                        conflicts.add((a1, a2))
+                    elif (has_work_in_buf or has_buf_overlap):
+                        if not can_coshare:
+                            conflicts.add((a1, a2))
+
+            assigned_nights: Dict[str, int] = {}
+            if conflicts:
+                try:
+                    model = cp_model.CpModel()
+                    night_vars = {}
+                    for a in aids:
+                        max_an = contracts[a].number_of_maximum_access_per_week
+                        night_vars[a] = model.NewIntVar(1, max_an, f"n_{a}")
+
+                    penalties = []
+                    for a1, a2 in conflicts:
+                        b_same = model.NewBoolVar(f"same_{a1}_{a2}")
+                        model.Add(night_vars[a1] == night_vars[a2]).OnlyEnforceIf(b_same)
+                        model.Add(night_vars[a1] != night_vars[a2]).OnlyEnforceIf(b_same.Not())
+                        penalties.append(b_same)
+
+                    for cid, contract in dm.contracts.items():
+                        c_aids = [a for a in aids if acts[a].contract_number == cid]
+                        if not c_aids:
+                            continue
+                        for n in range(1, contract.number_of_maximum_access_per_week + 1):
+                            is_on_n = []
+                            for a in c_aids:
+                                b = model.NewBoolVar(f"{a}_on_{n}")
+                                model.Add(night_vars[a] == n).OnlyEnforceIf(b)
+                                model.Add(night_vars[a] != n).OnlyEnforceIf(b.Not())
+                                is_on_n.append(b)
+                            model.Add(sum(is_on_n) <= contract.number_of_workfronts)
+
+                    model.Minimize(sum(penalties) * 10000 + sum(night_vars[a] for a in aids))
+                    solver = cp_model.CpSolver()
+                    solver.parameters.max_time_in_seconds = 2.0
+                    status = solver.Solve(model)
+
+                    if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+                        for a in aids:
+                            assigned_nights[a] = solver.Value(night_vars[a])
+                except Exception:
+                    assigned_nights = {}
+
+            # Fallback bin-packing for any unassigned activities
+            contract_acts = defaultdict(list)
+            for item in act_items:
+                aid = item[0]
+                if aid not in assigned_nights:
+                    contract_acts[acts[aid].contract_number].append(item)
+
+            for cid, items in contract_acts.items():
+                contract = dm.contracts[cid]
+                max_access = contract.number_of_maximum_access_per_week
+                max_wf = contract.number_of_workfronts
+                night_bins: List[List[Tuple[str, int, int]]] = [[] for _ in range(max_access)]
+                bin_idx = 0
+                for it in items:
+                    placed = False
+                    for attempt in range(max_access):
+                        target_b = (bin_idx + attempt) % max_access
+                        if len(night_bins[target_b]) < max_wf:
+                            night_bins[target_b].append(it)
+                            bin_idx = (target_b + 1) % max_access
+                            placed = True
+                            break
+                    if not placed:
+                        night_bins[0].append(it)
+                for night_num, b_items in enumerate(night_bins, start=1):
+                    for it in b_items:
+                        assigned_nights[it[0]] = night_num
+
+            for (aid, seq_idx, eclo) in act_items:
+                records.append({
+                    "activity_id": aid,
+                    "access_seq": seq_idx,
+                    "week": wk,
+                    "eclo": eclo,
+                    "access_night": assigned_nights.get(aid, 1),
+                })
 
         return records
 
@@ -400,21 +487,54 @@ class ScenarioScheduler:
                         model.Add(y_vars[(l_aid, w)] + y_vars[(other_aid, w)] <= 1)
 
         # Buffer separation between non-overlapping work spans
+        adj_conflicts = defaultdict(set)
         for a1, act1 in dm.activities.items():
             f1 = dm.get_safety_footprint(a1)
-            if not f1["buffer_locations"]:
-                continue
             for a2, act2 in dm.activities.items():
                 if a1 >= a2:
                     continue
                 if act1.line_code == act2.line_code and act1.bound == act2.bound:
+                    f2 = dm.get_safety_footprint(a2)
+                    w1, b1 = f1["work_span"], f1["buffer_locations"]
+                    w2, b2 = f2["work_span"], f2["buffer_locations"]
+                    t1 = dm.contracts[act1.contract_number].access_type
+                    t2 = dm.contracts[act2.contract_number].access_type
+                    can_cs = (w1 == w2 and t1 in ("PC", "C") and t2 in ("PC", "C") and not (t1 == "PC" and t2 == "PC"))
+                    hit1 = (w1 - w2) & b2
+                    hit2 = (w2 - w1) & b1
+                    buf_hit = b1 & b2
+                    if (hit1 or hit2 or buf_hit) and not can_cs:
+                        adj_conflicts[a1].add(a2)
+                        adj_conflicts[a2].add(a1)
+
                     overlap = f1["work_span"] & act2.expanded_locations
-                    if not overlap:
-                        f2 = dm.get_safety_footprint(a2)
-                        buf_hit = (act2.expanded_locations & f1["buffer_locations"]) or (act1.expanded_locations & f2["buffer_locations"])
-                        if buf_hit:
+                    if not overlap and f1["buffer_locations"]:
+                        buf_hit_nonoverlap = (act2.expanded_locations & f1["buffer_locations"]) or (act1.expanded_locations & f2["buffer_locations"])
+                        if buf_hit_nonoverlap:
                             for w in range(1, H + 1):
                                 model.Add(y_vars[(a1, w)] + y_vars[(a2, w)] <= 1)
+
+        # 4-clique maximum night limits (at most 3 mutually conflicting activities can share a week)
+        cliques_4 = []
+        nodes = sorted(list(dm.activities.keys()))
+        for i in range(len(nodes)):
+            n1 = nodes[i]
+            for j in range(i + 1, len(nodes)):
+                n2 = nodes[j]
+                if n2 not in adj_conflicts[n1]:
+                    continue
+                for k in range(j + 1, len(nodes)):
+                    n3 = nodes[k]
+                    if n3 not in adj_conflicts[n1] or n3 not in adj_conflicts[n2]:
+                        continue
+                    for l in range(k + 1, len(nodes)):
+                        n4 = nodes[l]
+                        if n4 in adj_conflicts[n1] and n4 in adj_conflicts[n2] and n4 in adj_conflicts[n3]:
+                            cliques_4.append([n1, n2, n3, n4])
+
+        for clique in cliques_4:
+            for w in range(1, H + 1):
+                model.Add(sum(y_vars[(a, w)] for a in clique) <= 3)
 
         # 7. Exact location supply capacity & legal mix constraints per week:
         # PM + PC <= capacity + excess
@@ -577,80 +697,65 @@ class ScenarioScheduler:
         # location -> week -> count of possessions
         loc_week_usage: Dict[Tuple[str, int], int] = defaultdict(int)
 
-        # In Scenario A: load baseline mapping
-        # In Scenario B: use ECLO to ensure 0 overrun
-        # In Scenario C: use ECLO within 2-week window if beneficial
-
-        # Base schedule mapping for activities
-        sample_path = os.path.join("PS1", "03_submission_sample", "SCHEDULE_ACCESS.csv")
-        sample_df = pd.read_csv(sample_path) if os.path.exists(sample_path) else None
-
         for aid in topo_order:
             act = dm.activities[aid]
-            contract = dm.contracts[act.contract_number]
+            cid = act.contract_number
+            contract = dm.contracts[cid]
             plan_comp_w = dm.week_for_date(contract.planned_completion_date)
 
-            # Earliest possible start week
+            # Earliest possible start week based on planned start and predecessors
             min_w = act.planned_start_week
             if act.predecessor_activity_id and act.predecessor_activity_id in scheduled:
                 pred_last = max(r["week"] for r in scheduled[act.predecessor_activity_id])
                 min_w = max(min_w, pred_last + 1)
 
+            max_contract_per_week = contract.number_of_maximum_access_per_week * contract.number_of_workfronts
+
             if scenario == "B":
                 # In Scenario B: MUST complete by plan_comp_w
-                # Check how many accesses needed with ECLO
-                # If needed, use ECLO (yield 1.5)
                 needed = act.total_accesses
-                # If total_accesses > (plan_comp_w - min_w + 1), use ECLO
                 weeks_avail = max(1, plan_comp_w - min_w + 1)
                 eclo_needed = needed > weeks_avail
-                
+
                 access_list = []
                 curr_w = min_w
                 rem_workload = needed * 2  # integer scaled (standard=2, ECLO=3)
                 while rem_workload > 0 and curr_w <= H:
-                    # Decide if ECLO
                     use_eclo = 1 if (eclo_needed or rem_workload == 3 or (rem_workload > (plan_comp_w - curr_w + 1) * 2)) else 0
                     if curr_w > plan_comp_w:
                         use_eclo = 1
                     gain = 3 if use_eclo == 1 else 2
                     rem_workload -= gain
                     access_list.append({"week": curr_w, "eclo": use_eclo})
+                    contract_week_usage[(cid, curr_w)] += 1
                     curr_w += 1
                 scheduled[aid] = access_list
 
             elif scenario == "C":
-                # Scenario C: 2-week window per line
-                # Let's assign window to weeks 14-15
-                eclo_win_start = 14
+                # Scenario C: balanced schedule, 2-week continuous ECLO window (weeks 14-15)
                 access_list = []
                 curr_w = min_w
-                needed = act.total_accesses
-                # Use sample schedule if available, else sequential
-                if sample_df is not None:
-                    sub = sample_df[sample_df["activity_id"] == aid].sort_values("access_seq")
-                    for _, r in sub.iterrows():
-                        wk = int(r["week"])
-                        ec = int(r["eclo"])
-                        access_list.append({"week": wk, "eclo": ec})
-                else:
-                    for _ in range(needed):
-                        access_list.append({"week": curr_w, "eclo": 0})
-                        curr_w += 1
+                rem_workload = act.total_accesses * 2
+                while rem_workload > 0 and curr_w <= H:
+                    # In weeks 14-15, if behind planned completion, use ECLO
+                    use_eclo = 1 if (curr_w in (14, 15) and curr_w >= plan_comp_w - 1 and rem_workload >= 3) else 0
+                    gain = 3 if use_eclo == 1 else 2
+                    rem_workload -= gain
+                    access_list.append({"week": curr_w, "eclo": use_eclo})
+                    contract_week_usage[(cid, curr_w)] += 1
+                    curr_w += 1
                 scheduled[aid] = access_list
 
-            else:  # Scenario A
-                # Strict supply, no ECLO
+            else:  # Scenario A: Strict supply, zero ECLO, purely forward sequential
                 access_list = []
-                if sample_df is not None:
-                    sub = sample_df[sample_df["activity_id"] == aid].sort_values("access_seq")
-                    for _, r in sub.iterrows():
-                        access_list.append({"week": int(r["week"]), "eclo": 0})
-                else:
-                    curr_w = min_w
-                    for _ in range(act.total_accesses):
-                        access_list.append({"week": curr_w, "eclo": 0})
+                curr_w = min_w
+                for _ in range(act.total_accesses):
+                    # Advance to next week if contract capacity in curr_w is full
+                    while curr_w <= H and contract_week_usage[(cid, curr_w)] >= max_contract_per_week:
                         curr_w += 1
+                    access_list.append({"week": curr_w, "eclo": 0})
+                    contract_week_usage[(cid, curr_w)] += 1
+                    curr_w += 1
                 scheduled[aid] = access_list
 
         return scheduled

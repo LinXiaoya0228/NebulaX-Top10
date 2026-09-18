@@ -409,13 +409,13 @@ with tab_network:
     # Location summary table
     st.markdown("#### Track Locations & Physical Supply Capacities")
     loc_table = []
-    for loc_id, loc_obj in optimizer.network.locations.items():
+    for loc_id, loc_info in optimizer.network.locations.items():
         loc_table.append({
             'Location ID': loc_id,
-            'Line': loc_obj.line,
-            'Type': loc_obj.loc_type,
-            'Bound': loc_obj.bound,
-            'Adjacent Locations': ", ".join(loc_obj.adj_list)
+            'Line': loc_info['line'],
+            'Type': loc_info['loc_type'],
+            'Bound': loc_info['bound'],
+            'Nominal Supply Capacity': loc_info['capacity']
         })
     st.dataframe(pd.DataFrame(loc_table), height=350, use_container_width=True)
 

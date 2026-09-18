@@ -44,6 +44,21 @@ class RailNetwork:
         # Buffer rules
         self.buffer_rules = dict(zip(self.buffer_df['nature_of_works'], self.buffer_df['up_to_buffer_sectors']))
 
+    @property
+    def locations(self) -> Dict[str, dict]:
+        """Dictionary of location_id -> metadata for all network locations"""
+        locs = {}
+        for loc_id, cap in self.location_capacity.items():
+            parts = loc_id.split(':')
+            locs[loc_id] = {
+                'location_id': loc_id,
+                'loc_type': "Platform" if parts[0] == "PLAT" else "Tunnel Sector",
+                'line': parts[1] if len(parts) > 1 else '',
+                'bound': parts[3] if len(parts) > 3 else '',
+                'capacity': cap
+            }
+        return locs
+
     def expand_activity_locations(self, start_loc: str, end_loc: str) -> List[str]:
         """
         Expands start and end tunnel sectors into all traversed platform sectors

@@ -11,7 +11,7 @@ import os
 import shutil
 import zipfile
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 import plotly.express as px
@@ -127,6 +127,9 @@ def process_uploaded_instance(uploaded_files, target_dir: str = "uploaded_data")
     return True, f"Successfully loaded test instance ({len(saved)} CSV files ready)", saved
 
 
+results_base = os.path.join(os.path.dirname(__file__), "results")
+
+
 def get_scenario_results_dir(scenario: str) -> str:
     """Returns directory holding scenario outputs (custom uploaded or official benchmark)."""
     if st.session_state.get("is_custom_data", False):
@@ -162,7 +165,6 @@ if "data_dir" not in st.session_state:
 if "is_custom_data" not in st.session_state:
     st.session_state.is_custom_data = False
 
-results_base = os.path.join(os.path.dirname(__file__), "results")
 active_data_dir = st.session_state.data_dir
 
 # Cache DataMall loader

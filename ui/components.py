@@ -1,5 +1,6 @@
 """
 ui/components.py - Reusable, accessible UI components for Railway Works Control Centre.
+Light mode styling matching executive decision support aesthetic.
 """
 
 from __future__ import annotations
@@ -34,10 +35,10 @@ def render_compact_header(
         st.markdown(
             """
             <div style="margin-bottom: 2px;">
-                <h1 style="display: flex; align-items: center; gap: 8px; margin: 0; padding: 0;">
+                <h1 style="display: flex; align-items: center; gap: 8px; margin: 0; padding: 0; color: #0F172A;">
                     <span>🚇</span> <span>Railway Works Control Centre</span>
                 </h1>
-                <div style="color: #94A3B8; font-size: 0.82rem; margin-top: 2px;">
+                <div style="color: #64748B; font-size: 0.82rem; margin-top: 2px;">
                     Multi-Disciplinary Track Access Scheduling & Real-Time Operational Decision Support
                 </div>
             </div>
@@ -62,7 +63,7 @@ def render_compact_header(
                 <span class="op-badge {val_class}" title="Official Baseline Validation State">
                     {val_icon} (Scenario {active_scenario})
                 </span>
-                <span class="op-badge" style="background: #16233B; color: #CBD5E1; border: 1px solid #334155;" title="Engineering Window Clock">
+                <span class="op-badge" style="background: #F1F5F9; color: #334155; border: 1px solid #CBD5E1;" title="Engineering Window Clock">
                     🕒 {current_time_str} | Window 01:00–04:30
                 </span>
             </div>
@@ -70,7 +71,7 @@ def render_compact_header(
             unsafe_allow_html=True,
         )
 
-    st.markdown("<hr style='margin: 8px 0 16px 0; border: none; border-bottom: 1px solid #1E293B;' />", unsafe_allow_html=True)
+    st.markdown("<hr style='margin: 8px 0 16px 0; border: none; border-bottom: 1px solid #E2E8F0;' />", unsafe_allow_html=True)
 
 
 def render_kpi_card(
@@ -85,12 +86,12 @@ def render_kpi_card(
     status: 'ok', 'warning', 'alert', or 'neutral'
     """
     color_map = {
-        "ok": "#34D399",
-        "warning": "#FBBF24",
-        "alert": "#FB7185",
-        "neutral": "#38BDF8",
+        "ok": "#059669",
+        "warning": "#D97706",
+        "alert": "#DC2626",
+        "neutral": "#0066CC",
     }
-    val_color = color_map.get(status, "#F8FAFC")
+    val_color = color_map.get(status, "#0F172A")
     delta_icon = "✓" if status == "ok" else ("⚠️" if status in ("warning", "alert") else "•")
 
     icon_html = f"<span>{icon}</span> " if icon else ""
@@ -147,13 +148,12 @@ def render_line_badge(line_code: str) -> str:
 def render_bound_badge(bound: str) -> str:
     """Returns HTML for bound badge with direction arrow and text."""
     if bound == "EB":
-        return '<span class="op-badge" style="background:#1E293B; color:#38BDF8; border:1px solid #38BDF8;">→ [EB] Eastbound</span>'
+        return '<span class="op-badge" style="background:#E0F2FE; color:#0284C7; border:1px solid #BAE6FD;">→ [EB] Eastbound</span>'
     elif bound == "WB":
-        return '<span class="op-badge" style="background:#1E293B; color:#FBBF24; border:1px solid #FBBF24;">← [WB] Westbound</span>'
+        return '<span class="op-badge" style="background:#FEF3C7; color:#D97706; border:1px solid #FCD34D;">← [WB] Westbound</span>'
     return f'<span class="op-badge">{bound}</span>'
 
 
 def render_eclo_badge() -> str:
     """Returns HTML for ECLO badge with dual visual cues."""
     return '<span class="op-badge badge-eclo">⚡ [ECLO] Extended Access</span>'
-

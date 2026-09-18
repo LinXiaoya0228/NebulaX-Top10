@@ -5,3 +5,6 @@ __pycache__/
 .venv/
 venv/
 .pytest_cache/
+uploaded_data/
+results/custom_*/
+

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import io
 import os
+import shutil
 import zipfile
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -33,6 +34,7 @@ from passenger_advisor import (
 )
 from ui.charts import (
     build_access_schedule_chart,
+    build_activity_timeline_chart,
     build_capacity_heatmap,
     build_contract_completion_chart,
     build_contract_gantt_chart,
@@ -47,6 +49,7 @@ from ui.components import (
     render_op_callout,
 )
 from ui.theme import SURFACES, TEXT_COLORS, inject_custom_theme
+from scheduler import ScenarioScheduler
 from validator import Validator
 
 # ------------------------------------------------------------------------------
@@ -71,6 +74,68 @@ def get_default_data_dir() -> str:
     return "PS1/01_data"
 
 
+def process_uploaded_instance(uploaded_files, target_dir: str = "uploaded_data") -> Tuple[bool, str, List[str]]:
+    """
+    Extracts ZIP archive or saves uploaded CSV files into target_dir.
+    Automatically backfills omitted infrastructure CSVs from official data directory.
+    Returns (success, message, saved_files).
+    """
+    os.makedirs(target_dir, exist_ok=True)
+    saved = []
+    default_dir = get_default_data_dir()
+
+    for uf in uploaded_files:
+        content = uf.read() if hasattr(uf, "read") else uf.getvalue()
+        if uf.name.lower().endswith(".zip"):
+            with zipfile.ZipFile(io.BytesIO(content), "r") as zf:
+                for member in zf.namelist():
+                    fname = os.path.basename(member)
+                    if fname.endswith(".csv"):
+                        source = zf.open(member)
+                        target = open(os.path.join(target_dir, fname), "wb")
+                        with source, target:
+                            shutil.copyfileobj(source, target)
+                        saved.append(fname)
+        elif uf.name.lower().endswith(".csv"):
+            fpath = os.path.join(target_dir, uf.name)
+            with open(fpath, "wb") as f:
+                f.write(content)
+            saved.append(uf.name)
+
+    req_files = ["07_PROJECT_DETAILS.csv", "08_ACTIVITY_DETAILS.csv"]
+    infra_files = [
+        "01_LINE_DETAILS.csv",
+        "02_SECTOR_DETAILS.csv",
+        "03_CROSSOVER_TRACKS.csv",
+        "04_PLATFORM_DETAILS.csv",
+        "05_BUFFER_LOCATION.csv",
+        "06_POWER_FEEDER_SUBSTATION.csv",
+    ]
+
+    has_core = all(os.path.exists(os.path.join(target_dir, rf)) for rf in req_files)
+    if not has_core:
+        missing = [rf for rf in req_files if not os.path.exists(os.path.join(target_dir, rf))]
+        return False, f"Missing required activity/project files: {missing}", saved
+
+    for inf in infra_files:
+        dest_p = os.path.join(target_dir, inf)
+        src_p = os.path.join(default_dir, inf)
+        if not os.path.exists(dest_p) and os.path.exists(src_p):
+            shutil.copyfile(src_p, dest_p)
+            saved.append(inf)
+
+    return True, f"Successfully loaded test instance ({len(saved)} CSV files ready)", saved
+
+
+def get_scenario_results_dir(scenario: str) -> str:
+    """Returns directory holding scenario outputs (custom uploaded or official benchmark)."""
+    if st.session_state.get("is_custom_data", False):
+        custom_dir = os.path.join(results_base, f"custom_scenario_{scenario}")
+        if os.path.exists(custom_dir):
+            return custom_dir
+    return os.path.join(results_base, f"scenario_{scenario}")
+
+
 def create_submission_zip(output_dir: str, scenario_name: str) -> bytes:
     """Zips the 3 output files for official download."""
     buf = io.BytesIO()
@@ -92,9 +157,13 @@ if "sandbox" not in st.session_state:
     st.session_state.sandbox = None
 if "active_scenario" not in st.session_state:
     st.session_state.active_scenario = "A"
+if "data_dir" not in st.session_state:
+    st.session_state.data_dir = get_default_data_dir()
+if "is_custom_data" not in st.session_state:
+    st.session_state.is_custom_data = False
 
 results_base = os.path.join(os.path.dirname(__file__), "results")
-active_data_dir = get_default_data_dir()
+active_data_dir = st.session_state.data_dir
 
 # Cache DataMall loader
 @st.cache_resource
@@ -103,9 +172,9 @@ def get_cached_datamall(data_dir: str) -> DataMall:
 
 dm = get_cached_datamall(active_data_dir)
 
-# Auto-load official scenario reports from disk
+# Auto-load scenario reports from disk
 for sc in ["A", "B", "C"]:
-    sc_dir = os.path.join(results_base, f"scenario_{sc}")
+    sc_dir = get_scenario_results_dir(sc)
     if os.path.exists(os.path.join(sc_dir, "RESULTS.csv")) and sc not in st.session_state.reports:
         try:
             val = Validator(active_data_dir)
@@ -123,9 +192,49 @@ if st.session_state.sandbox is None:
 
 
 # ------------------------------------------------------------------------------
-# 3. Persistent Sidebar Controls (Scenario Selector & System Telemetry)
+# 3. Persistent Sidebar Controls (Dataset Source, Scenario Selector & Telemetry)
 # ------------------------------------------------------------------------------
 with st.sidebar:
+    st.markdown("### 📂 Dataset & Instance")
+    dataset_source = st.radio(
+        "Choose Dataset Source:",
+        ["Official Benchmark (PS1/01_data)", "📤 Upload Custom Instance (CSVs / ZIP)"],
+        index=1 if st.session_state.is_custom_data else 0,
+        help="Upload undisclosed reviewer instance or use official competition data.",
+    )
+
+    if dataset_source == "📤 Upload Custom Instance (CSVs / ZIP)":
+        uploaded_files = st.file_uploader(
+            "Upload Instance CSVs or .ZIP",
+            type=["csv", "zip"],
+            accept_multiple_files=True,
+            help="Upload the 8 instance CSVs or a zip file containing them.",
+        )
+        if uploaded_files:
+            success, msg, saved = process_uploaded_instance(uploaded_files)
+            if success:
+                st.session_state.data_dir = "uploaded_data"
+                st.session_state.is_custom_data = True
+                st.success(f"✓ {msg}")
+                if st.button("🚀 Run Solver on Uploaded Instance", type="primary", use_container_width=True):
+                    with st.spinner(f"Solving Scenario {st.session_state.active_scenario} with CP-SAT..."):
+                        sched = ScenarioScheduler("uploaded_data")
+                        custom_out = os.path.join(results_base, f"custom_scenario_{st.session_state.active_scenario}")
+                        sched.solve(scenario=st.session_state.active_scenario, output_dir=custom_out, timeout_seconds=30)
+                        val = Validator("uploaded_data")
+                        val_rep = val.validate(custom_out, st.session_state.active_scenario, strict_buffers=True)
+                        st.session_state.reports[st.session_state.active_scenario] = val_rep
+                        st.session_state.results_dirs[st.session_state.active_scenario] = custom_out
+                        st.rerun()
+            else:
+                st.error(f"✕ {msg}")
+    else:
+        if st.session_state.is_custom_data:
+            st.session_state.data_dir = get_default_data_dir()
+            st.session_state.is_custom_data = False
+            st.rerun()
+
+    st.markdown("---")
     st.markdown("### 🚇 Scenario Control")
     sc_options = ["Scenario A (Min Overrun)", "Scenario B (Zero Overrun)", "Scenario C (Pareto ECLO)"]
     current_idx = 0
@@ -138,23 +247,23 @@ with st.sidebar:
         "Active Operational Scenario",
         sc_options,
         index=current_idx,
-        help="Select official benchmark scenario to inspect.",
+        help="Select scenario to inspect.",
     )
     st.session_state.active_scenario = chosen_sc_label.split()[1]
     active_sc = st.session_state.active_scenario
 
-    # Compact sidebar validation badge
+    # Compact sidebar validation badge matching light executive theme
     if active_sc in st.session_state.reports:
         rep = st.session_state.reports[active_sc]
         sc_score = rep["soft_scores"]["objective_score"]
         is_feas = rep["feasible"]
-        badge_color = "#34D399" if is_feas else "#FB7185"
+        badge_color = "#059669" if is_feas else "#DC2626"
         badge_text = "100% FEASIBLE (0 Breaches)" if is_feas else "VIOLATIONS DETECTED"
         st.markdown(
             f"""
-            <div style="background: #111C2E; border: 1px solid #25334A; border-radius: 6px; padding: 10px; margin-top: 6px;">
-                <div style="font-size: 0.72rem; text-transform: uppercase; color: #94A3B8; font-weight: 600;">Scenario {active_sc} Score</div>
-                <div style="font-size: 1.4rem; font-weight: 700; color: #38BDF8;">{sc_score:.1f}</div>
+            <div style="background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 6px; padding: 10px; margin-top: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                <div style="font-size: 0.72rem; text-transform: uppercase; color: #64748B; font-weight: 600;">Scenario {active_sc} Score</div>
+                <div style="font-size: 1.4rem; font-weight: 700; color: #0066CC;">{sc_score:.1f}</div>
                 <div style="font-size: 0.75rem; color: {badge_color}; font-weight: 600; margin-top: 2px;">
                     {'✓' if is_feas else '✕'} {badge_text}
                 </div>
@@ -166,7 +275,7 @@ with st.sidebar:
     st.markdown("---")
     st.markdown(
         """
-        <div style="font-size: 0.78rem; line-height: 1.6; color: #94A3B8;">
+        <div style="font-size: 0.78rem; line-height: 1.6; color: #64748B;">
             <b>Shift:</b> 2 AM Works Controller<br>
             <b>Window:</b> 01:00 - 04:30 hrs<br>
             <b>Lines:</b> [ALP] Alpha, [BET] Beta<br>
@@ -246,7 +355,7 @@ def page_control_room():
 
         with c_left:
             st.markdown("#### Delayed Contracts & Penalty Drivers")
-            res_p = os.path.join(results_base, f"scenario_{active_sc}", "RESULTS.csv")
+            res_p = os.path.join(get_scenario_results_dir(active_sc), "RESULTS.csv")
             if os.path.exists(res_p):
                 res_df = pd.read_csv(res_p)
                 delayed_df = res_df[res_df["overrun_days"] > 0].copy()
@@ -285,8 +394,9 @@ def page_schedule():
     rep = st.session_state.reports.get(active_sc)
     render_compact_header(active_sc, rep)
 
-    acc_p = os.path.join(results_base, f"scenario_{active_sc}", "SCHEDULE_ACCESS.csv")
-    res_p = os.path.join(results_base, f"scenario_{active_sc}", "RESULTS.csv")
+    sc_dir = get_scenario_results_dir(active_sc)
+    acc_p = os.path.join(sc_dir, "SCHEDULE_ACCESS.csv")
+    res_p = os.path.join(sc_dir, "RESULTS.csv")
 
     if not os.path.exists(acc_p) or not os.path.exists(res_p):
         st.error(f"Schedule artifacts not found for Scenario {active_sc}.")
@@ -309,6 +419,7 @@ def page_schedule():
         sched_view = st.radio(
             "Visualisation View Mode",
             [
+                "🎨 Activity Possession Timeline (by Contract)",
                 "📊 Continuous Gantt (Connected Capsules)",
                 "🗂️ Contract Executive Overview (14 Contracts)",
                 "⏹️ Discrete Point Matrix",
@@ -331,7 +442,19 @@ def page_schedule():
     with f5:
         week_range = st.slider("Planning Week Range", min_value=1, max_value=29, value=(1, 29))
 
-    if sched_view == "🗂️ Contract Executive Overview (14 Contracts)":
+    if sched_view == "🎨 Activity Possession Timeline (by Contract)":
+        fig_timeline = build_activity_timeline_chart(
+            dm=dm,
+            access_df=acc_df,
+            scenario_label=f"Scenario {active_sc}",
+            contract_filter=contract_filter,
+            line_filter=line_filter,
+            nature_filter=nature_filter,
+            eclo_only=eclo_only,
+            week_range=week_range,
+        )
+        st.plotly_chart(fig_timeline, width="stretch")
+    elif sched_view == "🗂️ Contract Executive Overview (14 Contracts)":
         fig_contract = build_contract_gantt_chart(
             access_df=acc_df,
             results_df=res_df,
@@ -379,7 +502,7 @@ def page_network():
     rep = st.session_state.reports.get(active_sc)
     render_compact_header(active_sc, rep)
 
-    occ_p = os.path.join(results_base, f"scenario_{active_sc}", "SCHEDULE_OCCUPANCY.csv")
+    occ_p = os.path.join(get_scenario_results_dir(active_sc), "SCHEDULE_OCCUPANCY.csv")
     if not os.path.exists(occ_p):
         st.error(f"Occupancy file not found for Scenario {active_sc}.")
         return
@@ -675,7 +798,7 @@ def page_passenger_eclo():
 
     st.markdown("---")
     st.markdown("#### Official ECLO Commuter Impact Assessment")
-    acc_p = os.path.join(results_base, f"scenario_{active_sc}", "SCHEDULE_ACCESS.csv")
+    acc_p = os.path.join(get_scenario_results_dir(active_sc), "SCHEDULE_ACCESS.csv")
     if os.path.exists(acc_p):
         acc_df = pd.read_csv(acc_p)
         impact = calculator.calculate_eclo_passenger_impact(acc_df)
@@ -712,8 +835,9 @@ def page_decision_brief():
     explainer = DeterministicExplainer(active_data_dir)
     generator = HandoverBriefingGenerator(active_data_dir)
 
-    acc_p = os.path.join(results_base, f"scenario_{active_sc}", "SCHEDULE_ACCESS.csv")
-    occ_p = os.path.join(results_base, f"scenario_{active_sc}", "SCHEDULE_OCCUPANCY.csv")
+    sc_dir = get_scenario_results_dir(active_sc)
+    acc_p = os.path.join(sc_dir, "SCHEDULE_ACCESS.csv")
+    occ_p = os.path.join(sc_dir, "SCHEDULE_OCCUPANCY.csv")
 
     if not os.path.exists(acc_p) or not os.path.exists(occ_p):
         st.error("Schedule files not found.")
@@ -811,7 +935,70 @@ def page_validator_downloads():
     st.markdown("### 📥 Official Submission Artifacts & Automated Validator")
     st.caption("Verify mathematical compliance and download the official submission ZIP archive or individual CSV files.")
 
-    out_dir = os.path.join(results_base, f"scenario_{active_sc}")
+    # Dedicated Judge / Evaluator Test Instance Upload Section
+    with st.expander("📤 Reviewer / Judge Live Evaluation Panel: Upload Test Instance & Solve", expanded=st.session_state.is_custom_data):
+        st.markdown(
+            """
+            <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-left: 4px solid #0066CC; padding: 12px; border-radius: 6px; margin-bottom: 14px;">
+                <b style="color: #0F172A;">Hidden Test Instance Live Evaluation:</b><br>
+                <span style="color: #475569; font-size: 0.85rem;">
+                Reviewers may upload an undisclosed test instance containing the 8 CSV dataset files (or a <code>.zip</code> containing them).
+                The system will automatically validate network structure, execute the CP-SAT engine live to generate the optimal schedule, verify all 14 official rules with the mathematical validator, and produce full compliance reports and downloadable submission artifacts.
+                </span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        judge_files = st.file_uploader(
+            "Upload Hidden Benchmark Instance (.ZIP or 8 CSV files)",
+            type=["zip", "csv"],
+            accept_multiple_files=True,
+            key="judge_main_uploader",
+        )
+        if judge_files:
+            success, msg, saved = process_uploaded_instance(judge_files)
+            if success:
+                st.session_state.data_dir = "uploaded_data"
+                st.session_state.is_custom_data = True
+                st.success(f"✓ {msg}")
+
+                # Display instance stats
+                custom_dm = get_cached_datamall("uploaded_data")
+                c1, c2, c3, c4 = st.columns(4)
+                c1.metric("Contracts", len(custom_dm.contracts))
+                c2.metric("Activities", len(custom_dm.activities))
+                c3.metric("Locations", len(custom_dm.location_supply))
+                c4.metric("Planning Horizon", f"{custom_dm.total_weeks} Weeks")
+
+                btn_c1, btn_c2 = st.columns([2, 1])
+                with btn_c1:
+                    run_sc = st.selectbox("Select Scenario to Solve", ["Scenario A", "Scenario B", "Scenario C", "All Scenarios (A, B & C)"], key="judge_sc_select")
+                with btn_c2:
+                    st.write("")
+                    st.write("")
+                    if st.button("🚀 Run Live Optimization & Validation", type="primary", use_container_width=True, key="judge_run_btn"):
+                        to_solve = ["A", "B", "C"] if "All" in run_sc else [run_sc.split()[1]]
+                        for sc in to_solve:
+                            with st.spinner(f"Optimizing Scenario {sc} with CP-SAT (30s max)..."):
+                                sched = ScenarioScheduler("uploaded_data")
+                                custom_out = os.path.join(results_base, f"custom_scenario_{sc}")
+                                sched.solve(scenario=sc, output_dir=custom_out, timeout_seconds=30)
+                                val = Validator("uploaded_data")
+                                val_rep = val.validate(custom_out, sc, strict_buffers=True)
+                                st.session_state.reports[sc] = val_rep
+                                st.session_state.results_dirs[sc] = custom_out
+                        st.success(f"✓ Optimization & mathematical validation completed successfully for {to_solve}!")
+                        st.rerun()
+            else:
+                st.error(f"✕ {msg}")
+
+        if st.session_state.is_custom_data:
+            if st.button("🔄 Reset to Official Benchmark (PS1/01_data)", key="judge_reset_btn"):
+                st.session_state.data_dir = get_default_data_dir()
+                st.session_state.is_custom_data = False
+                st.rerun()
+
+    out_dir = get_scenario_results_dir(active_sc)
     if os.path.exists(out_dir):
         # Validation Status Card
         if rep:

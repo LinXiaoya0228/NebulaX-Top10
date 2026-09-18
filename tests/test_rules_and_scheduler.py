@@ -146,3 +146,38 @@ def test_scenario_A_eclo_forbidden(validator, tmp_path):
     report = validator.validate(out_dir, "A")
     assert report["feasible"] is False
     assert any(v["rule"] == "eclo" for v in report["hard_violations"])
+
+
+def test_generated_scenarios_strict_buffer_safety(validator):
+    # Verify our generated schedules pass strict same-night buffer checks
+    for scen in ["A", "B", "C"]:
+        res_dir = f"results/scenario_{scen}"
+        if os.path.exists(res_dir):
+            report = validator.validate(res_dir, scen, strict_buffers=True)
+            assert report["feasible"] is True, f"Scenario {scen} failed: {report['hard_violations']}"
+            assert len(report["hard_violations"]) == 0
+
+
+def test_night_buffer_violation_caught(validator, tmp_path):
+    # Force two intra-contract conflicting activities onto the same access_night to verify validator catches it
+    out_dir = str(tmp_path / "buffer_conflict_test")
+    os.makedirs(out_dir, exist_ok=True)
+
+    access_df = pd.read_csv("results/scenario_A/SCHEDULE_ACCESS.csv")
+    occ_df = pd.read_csv("results/scenario_A/SCHEDULE_OCCUPANCY.csv")
+    res_df = pd.read_csv("results/scenario_A/RESULTS.csv")
+
+    # In week 22, A001 and A007 belong to Contract C001 and have overlapping buffers at SEC:BET:H02_S15:EB.
+    # Force both onto access_night = 1 within the same (contract, week) accounting space.
+    bad_access = access_df.copy()
+    mask = (bad_access["week"] == 22) & (bad_access["activity_id"].isin(["A001", "A007"]))
+    bad_access.loc[mask, "access_night"] = 1
+
+    bad_access.to_csv(os.path.join(out_dir, "SCHEDULE_ACCESS.csv"), index=False)
+    occ_df.to_csv(os.path.join(out_dir, "SCHEDULE_OCCUPANCY.csv"), index=False)
+    res_df.to_csv(os.path.join(out_dir, "RESULTS.csv"), index=False)
+
+    report = validator.validate(out_dir, "A", strict_buffers=True)
+    assert report["feasible"] is False
+    assert any(v["rule"] == "closure" and "buffer" in v["detail"].lower() for v in report["hard_violations"])
+

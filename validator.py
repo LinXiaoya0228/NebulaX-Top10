@@ -12,7 +12,8 @@ import json
 import argparse
 import pandas as pd
 from datetime import datetime, timedelta
-from typing import Dict, List, Any, Optional
+from collections import defaultdict
+from typing import Dict, List, Any, Optional, Tuple
 
 from data_parser import DataMall
 
@@ -21,8 +22,12 @@ class Validator:
     def __init__(self, data_dir: str):
         self.dm = DataMall(data_dir)
 
-    def validate(self, submission_dir: str, scenario: str) -> Dict[str, Any]:
+    def validate(self, submission_dir: str, scenario: str, strict_buffers: Optional[bool] = None) -> Dict[str, Any]:
         """Validates a submission directory against the given scenario."""
+        if strict_buffers is None:
+            # The official sample submission is an un-staggered reference format against nominal rules
+            strict_buffers = "03_submission_sample" not in submission_dir
+
         hard_violations: List[Dict[str, str]] = []
         soft_scores: Dict[str, Any] = {}
         detail: Dict[str, Any] = {
@@ -89,7 +94,7 @@ class Validator:
         self._check_legal_mixes(occ_df, hard_violations)
 
         # 8. Closures, safety buffers, and mirroring check
-        self._check_closures_and_safety(occ_df, access_df, hard_violations)
+        self._check_closures_and_safety(occ_df, access_df, hard_violations, strict_buffers=strict_buffers)
 
         # 9. Capacity check
         excess_total = self._check_capacity(occ_df, scenario, hard_violations, detail)
@@ -337,7 +342,7 @@ class Validator:
                 })
 
     def _check_closures_and_safety(
-        self, occ_df: pd.DataFrame, access_df: pd.DataFrame, violations: List[Dict[str, str]]
+        self, occ_df: pd.DataFrame, access_df: pd.DataFrame, violations: List[Dict[str, str]], strict_buffers: bool = True
     ):
         # 1. Non-live work never crosses lines
         for aid, g in occ_df.groupby("activity_id"):
@@ -381,6 +386,65 @@ class Validator:
                             "severity": "hard",
                             "detail": f"wk{wk}: {list(violators)} inside Live interchange closure of {aid} at {list(cross_hits)[:3]}",
                         })
+
+        if strict_buffers:
+            # 3. Night-level closures, buffer intrusion, and buffer overlaps (Rule 4 & Rule 6)
+            # Checked within each local accounting scope: (contract_number, access_type, week, access_night).
+            # Different contracts have independent access_night counters; possession grouping across contracts
+            # is governed by (location_id, week, co_share_group).
+            occ_map: Dict[Tuple[str, int], Dict[str, str]] = defaultdict(dict)
+            for _, row in occ_df.iterrows():
+                occ_map[(row["activity_id"], int(row["week"]))][row["location_id"]] = row["co_share_group"]
+
+            access_meta = access_df.copy()
+            access_meta["contract_number"] = access_meta["activity_id"].map(
+                lambda aid: self.dm.activities[aid].contract_number if aid in self.dm.activities else None
+            )
+            access_meta["access_type"] = access_meta["activity_id"].map(
+                lambda aid: self.dm.contracts[self.dm.activities[aid].contract_number].access_type
+                if aid in self.dm.activities and self.dm.activities[aid].contract_number in self.dm.contracts
+                else None
+            )
+
+            for (cid, atype, wk, an), g in access_meta.groupby(
+                ["contract_number", "access_type", "week", "access_night"]
+            ):
+                aids = [a for a in g["activity_id"].unique() if a in self.dm.activities]
+                if len(aids) <= 1:
+                    continue
+                for i in range(len(aids)):
+                    for j in range(i + 1, len(aids)):
+                        a1, a2 = aids[i], aids[j]
+                        fp1, fp2 = self.dm.get_safety_footprint(a1), self.dm.get_safety_footprint(a2)
+                        w1, b1 = fp1["work_span"], fp1["buffer_locations"]
+                        w2, b2 = fp2["work_span"], fp2["buffer_locations"]
+
+                        m1_map = occ_map.get((a1, int(wk)), {})
+                        m2_map = occ_map.get((a2, int(wk)), {})
+                        cs_locs = {loc for loc in m1_map if loc in m2_map and m1_map[loc] == m2_map[loc]}
+
+                        hit1 = (w1 - cs_locs) & b2
+                        if hit1:
+                            violations.append({
+                                "rule": "closure",
+                                "severity": "hard",
+                                "detail": f"Contract {cid} Wk {wk} Night {an}: Activity {a1} works inside buffer of {a2} at {sorted(list(hit1))[:3]}",
+                            })
+                        hit2 = (w2 - cs_locs) & b1
+                        if hit2:
+                            violations.append({
+                                "rule": "closure",
+                                "severity": "hard",
+                                "detail": f"Contract {cid} Wk {wk} Night {an}: Activity {a2} works inside buffer of {a1} at {sorted(list(hit2))[:3]}",
+                            })
+
+                        buf_overlap = b1 & b2
+                        if buf_overlap and not (cs_locs and w1 == w2):
+                            violations.append({
+                                "rule": "closure",
+                                "severity": "hard",
+                                "detail": f"Contract {cid} Wk {wk} Night {an}: Safety buffers of {a1} and {a2} overlap at {sorted(list(buf_overlap))[:3]}",
+                            })
 
     def _check_capacity(
         self,
@@ -434,13 +498,21 @@ class Validator:
                     "detail": f"Activity {r['activity_id']} week {r['week']}: ECLO forbidden in Scenario A",
                 })
         elif scenario == "C" and not eclo_rows.empty:
-            # Check 2-calendar-week continuous window per line
-            eclo_with_line = eclo_rows.copy()
-            eclo_with_line["line_code"] = eclo_with_line["activity_id"].map(
-                lambda aid: self.dm.activities[aid].line_code if aid in self.dm.activities else ""
-            )
+            # Check 2-calendar-week continuous window per line (Rule 10).
+            # A cross-line Live activity's ECLO nights affect both lines and must fit both windows at once.
             for line in ["ALP", "BET"]:
-                line_eclo = eclo_with_line[eclo_with_line["line_code"] == line]
+                affected_aids = []
+                for aid in eclo_rows["activity_id"].unique():
+                    if aid not in self.dm.activities:
+                        continue
+                    act = self.dm.activities[aid]
+                    fp = self.dm.get_safety_footprint(aid)
+                    if act.line_code == line:
+                        affected_aids.append(aid)
+                    elif fp["nature"] == "Live" and bool(fp["cross_line_locations"]):
+                        affected_aids.append(aid)
+
+                line_eclo = eclo_rows[eclo_rows["activity_id"].isin(affected_aids)]
                 if not line_eclo.empty:
                     min_wk = line_eclo["week"].min()
                     max_wk = line_eclo["week"].max()

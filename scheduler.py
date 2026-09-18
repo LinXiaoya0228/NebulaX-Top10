@@ -531,8 +531,9 @@ class ScenarioScheduler:
             # scaled by 10: 70 * excess + 50 * eclo
             model.Minimize(total_excess_count * 70 + total_eclo_count * 50)
         elif scenario == "C":
-            # weighted_overrun + 70 * excess + 50 * eclo
-            model.Minimize(sum(weighted_overrun_terms) * 100 + total_excess_count * 700 + total_eclo_count * 500)
+            # Exact integer-scaled objective matching official formula:
+            # priority_weighted_score * 10 + 70 * excess + 50 * eclo
+            model.Minimize(sum(weighted_overrun_terms) + total_excess_count * 70 + total_eclo_count * 50)
 
         # Solve
         solver = cp_model.CpSolver()

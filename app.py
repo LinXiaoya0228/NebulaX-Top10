@@ -118,7 +118,7 @@ scenario_code = {
 }[scenario_option]
 
 timeout = st.sidebar.slider("Solver Timeout (seconds)", min_value=5, max_value=60, value=20)
-run_button = st.sidebar.button("🚀 Run Optimisation", type="primary", use_container_width=True)
+run_button = st.sidebar.button("🚀 Run Optimisation", type="primary", width="stretch")
 
 # Title Header
 st.title("🚆 Railway Track Access Optimisation Engine")
@@ -265,7 +265,7 @@ if st.session_state.reports:
                     scores.get("objective_score", 0.0),
                 ],
             }
-            st.dataframe(pd.DataFrame(score_data), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(score_data), width="stretch", hide_index=True)
 
         with col_right:
             st.markdown("#### Hard Violations Checklist")
@@ -292,7 +292,7 @@ if st.session_state.reports:
                 lambda c: dm.contracts[c].contract_priority
             )
             results_df["start_date"] = results_df["contract_number"].map(
-                lambda c: dm.contracts[c].planned_start_date
+                lambda c: min(act.planned_start_date for act in dm.activities.values() if act.contract_number == c)
             )
 
             fig = go.Figure()
@@ -336,7 +336,7 @@ if st.session_state.reports:
                 height=500,
                 xaxis=dict(type="date"),
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
 
     # Tab 3: Possession Density Heatmap
     with tab3:
@@ -356,7 +356,7 @@ if st.session_state.reports:
                 aspect="auto",
             )
             fig.update_layout(height=650, title=f"Possession Density by Location & Week (Scenario {selected_sc})")
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
 
     # Tab 4: Access Schedule Tables
     with tab4:
@@ -364,7 +364,54 @@ if st.session_state.reports:
         acc_file = os.path.join(out_dir, "SCHEDULE_ACCESS.csv")
         if os.path.exists(acc_file):
             acc_df = pd.read_csv(acc_file)
-            st.dataframe(acc_df, use_container_width=True)
+
+            # Predecessor Dependency & Activity Summary View
+            st.markdown("#### 🔗 Activity & Predecessor Dependency Summary")
+            dm = DataMall(active_data_dir or get_default_data_dir())
+
+            act_summary = []
+            for aid, act in dm.activities.items():
+                act_accs = acc_df[acc_df["activity_id"] == aid]
+                if not act_accs.empty:
+                    min_w = int(act_accs["week"].min())
+                    max_w = int(act_accs["week"].max())
+                    cnt = len(act_accs)
+                    eclo_cnt = int(act_accs["eclo"].sum())
+                    pred = act.predecessor_activity_id
+                    pred_finish = None
+                    pred_status = "N/A (No Predecessor)"
+                    if pred:
+                        pred_accs = acc_df[acc_df["activity_id"] == pred]
+                        if not pred_accs.empty:
+                            pred_finish = int(pred_accs["week"].max())
+                            if min_w > pred_finish:
+                                pred_status = f"✅ Valid (Pred {pred} finished W{pred_finish} < Succ start W{min_w})"
+                            else:
+                                pred_status = f"❌ VIOLATION (Pred {pred} finished W{pred_finish} >= Succ start W{min_w})"
+
+                    act_summary.append({
+                        "Activity": aid,
+                        "Contract": act.contract_number,
+                        "Planned Start Wk": act.planned_start_week,
+                        "Start Week": min_w,
+                        "Finish Week": max_w,
+                        "Accesses Delivered": cnt,
+                        "ECLO Accesses": eclo_cnt,
+                        "Predecessor ID": pred or "None",
+                        "Predecessor Status (FS+0)": pred_status,
+                    })
+
+            act_sum_df = pd.DataFrame(act_summary)
+            # Filter to show activities with predecessors or all
+            show_only_preds = st.checkbox("Show only activities with Predecessor dependencies", value=False)
+            if show_only_preds:
+                filtered_sum_df = act_sum_df[act_sum_df["Predecessor ID"] != "None"]
+                st.dataframe(filtered_sum_df, width="stretch", hide_index=True)
+            else:
+                st.dataframe(act_sum_df, width="stretch", hide_index=True)
+
+            st.markdown("#### Detailed Nightly Access Records (`SCHEDULE_ACCESS.csv`)")
+            st.dataframe(acc_df, width="stretch")
 
     # Tab 5: Download Package
     with tab5:

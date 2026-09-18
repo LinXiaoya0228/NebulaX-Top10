@@ -33,6 +33,7 @@ from passenger_advisor import (
 )
 from ui.charts import (
     build_access_schedule_chart,
+    build_activity_timeline_chart,
     build_capacity_heatmap,
     build_contract_completion_chart,
     build_contract_gantt_chart,
@@ -309,6 +310,7 @@ def page_schedule():
         sched_view = st.radio(
             "Visualisation View Mode",
             [
+                "🎨 Activity Possession Timeline (by Contract)",
                 "📊 Continuous Gantt (Connected Capsules)",
                 "🗂️ Contract Executive Overview (14 Contracts)",
                 "⏹️ Discrete Point Matrix",
@@ -331,7 +333,19 @@ def page_schedule():
     with f5:
         week_range = st.slider("Planning Week Range", min_value=1, max_value=29, value=(1, 29))
 
-    if sched_view == "🗂️ Contract Executive Overview (14 Contracts)":
+    if sched_view == "🎨 Activity Possession Timeline (by Contract)":
+        fig_timeline = build_activity_timeline_chart(
+            dm=dm,
+            access_df=acc_df,
+            scenario_label=f"Scenario {active_sc}",
+            contract_filter=contract_filter,
+            line_filter=line_filter,
+            nature_filter=nature_filter,
+            eclo_only=eclo_only,
+            week_range=week_range,
+        )
+        st.plotly_chart(fig_timeline, width="stretch")
+    elif sched_view == "🗂️ Contract Executive Overview (14 Contracts)":
         fig_contract = build_contract_gantt_chart(
             access_df=acc_df,
             results_df=res_df,

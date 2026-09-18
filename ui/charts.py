@@ -1,18 +1,20 @@
 """
 ui/charts.py - Accessible, responsive Plotly chart builders for Railway Works Control Centre.
 Strictly adheres to WCAG 2.2 AA and Rule 1.4.1 (color is never the only visual cue).
+Light mode styling matching executive timeline aesthetic.
 """
 
 from __future__ import annotations
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
+import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
 from data_parser import DataMall
-from ui.theme import CLOSURE_THEME, LINE_THEME, STATUS_THEME, SURFACES, TEXT_COLORS
+from ui.theme import CLOSURE_THEME, CONTRACT_COLORS, LINE_THEME, STATUS_THEME, SURFACES, TEXT_COLORS
 
 
 # ==============================================================================
@@ -27,7 +29,7 @@ def apply_chart_theme(
     x_title: Optional[str] = None,
     y_title: Optional[str] = None,
 ) -> go.Figure:
-    """Applies standardized dark control-room theme and responsive margins."""
+    """Applies standardized light control-room theme and responsive margins."""
     fig.update_layout(
         title=dict(
             text=f"<b>{title}</b>",
@@ -35,8 +37,8 @@ def apply_chart_theme(
             x=0.01,
             y=0.98,
         ),
-        paper_bgcolor=SURFACES["card"],
-        plot_bgcolor=SURFACES["bg_app"],
+        paper_bgcolor="#FFFFFF",
+        plot_bgcolor="#FFFFFF",
         font=dict(color=TEXT_COLORS["primary"], size=12),
         height=height,
         margin=dict(l=60, r=40, t=75, b=45),
@@ -47,33 +49,35 @@ def apply_chart_theme(
             y=1.04,
             xanchor="right",
             x=1.0,
-            font=dict(size=12, color="#F8FAFC"),
-            bgcolor="rgba(17, 28, 46, 0.95)",
+            font=dict(size=12, color=TEXT_COLORS["primary"]),
+            bgcolor="rgba(255, 255, 255, 0.95)",
             bordercolor=SURFACES["border"],
             borderwidth=1,
         ),
         hoverlabel=dict(
-            bgcolor=SURFACES["card_alt"],
+            bgcolor="#FFFFFF",
             bordercolor=SURFACES["border"],
             font=dict(color=TEXT_COLORS["primary"], size=12),
         ),
     )
     x_kwargs = dict(
-        gridcolor=SURFACES["border"],
-        zerolinecolor=SURFACES["border"],
-        tickfont=dict(color="#F8FAFC", size=12),
+        gridcolor="#F1F5F9",
+        zerolinecolor="#E2E8F0",
+        linecolor="#CBD5E1",
+        tickfont=dict(color=TEXT_COLORS["primary"], size=11),
     )
     if x_title:
-        x_kwargs["title"] = dict(text=x_title, font=dict(color="#F8FAFC", size=13))
+        x_kwargs["title"] = dict(text=x_title, font=dict(color=TEXT_COLORS["primary"], size=12))
     fig.update_xaxes(**x_kwargs)
 
     y_kwargs = dict(
-        gridcolor=SURFACES["border"],
-        zerolinecolor=SURFACES["border"],
-        tickfont=dict(color="#F8FAFC", size=12),
+        gridcolor="#F1F5F9",
+        zerolinecolor="#E2E8F0",
+        linecolor="#CBD5E1",
+        tickfont=dict(color=TEXT_COLORS["primary"], size=11),
     )
     if y_title:
-        y_kwargs["title"] = dict(text=y_title, font=dict(color="#F8FAFC", size=13))
+        y_kwargs["title"] = dict(text=y_title, font=dict(color=TEXT_COLORS["primary"], size=12))
     fig.update_yaxes(**y_kwargs)
 
     return fig
@@ -96,6 +100,142 @@ def group_consecutive_weeks(weeks: List[int]) -> List[Tuple[int, int]]:
             prev = w
     intervals.append((start, prev))
     return intervals
+
+
+# ==============================================================================
+# 7.0 Activity Possession Timeline (by Contract) - Matching Attached Benchmark Image
+# ==============================================================================
+
+def build_activity_timeline_chart(
+    dm: DataMall,
+    access_df: pd.DataFrame,
+    scenario_label: str = "Scenario A",
+    contract_filter: str = "All",
+    line_filter: str = "All",
+    nature_filter: str = "All",
+    eclo_only: bool = False,
+    week_range: Tuple[int, int] = (1, 29),
+) -> go.Figure:
+    """
+    Renders the exact Activity Possession Timeline (by Contract) matching the attached benchmark screenshot:
+    - Pure white clean canvas (#FFFFFF)
+    - X-axis formatted as calendar dates (Jan 2027, Feb 2027, Mar 2027, ...)
+    - Y-axis sorted activities reversed (A001, A003, A006, A008, ...)
+    - Color grouped by Contract with discrete contract color palette (C001..C014)
+    - Contiguous blocks of scheduled weeks form crisp horizontal timeline bars
+    - Hover data: Contract, Priority, Nature, StartWeek, EndWeek, Total_Accesses, ECLO_Nights
+    - Title: Activity Possession Timeline (54 Scheduled Activities)
+    """
+    df = access_df.copy()
+
+    # Enrich metadata
+    df["contract_number"] = df["activity_id"].map(lambda a: dm.activities[a].contract_number if a in dm.activities else "UNKNOWN")
+    df["line_code"] = df["activity_id"].map(lambda a: dm.activities[a].line_code if a in dm.activities else "ALP")
+    df["bound"] = df["activity_id"].map(lambda a: dm.activities[a].bound if a in dm.activities else "EB")
+    df["nature"] = df["contract_number"].map(lambda c: dm.contracts[c].nature_of_activity if c in dm.contracts else "Non-live")
+    df["priority"] = df["activity_id"].map(lambda a: dm.activities[a].activity_priority if a in dm.activities else 3)
+    if "is_eclo" in df.columns:
+        df["eclo"] = df["is_eclo"].astype(int)
+    elif "eclo" not in df.columns:
+        df["eclo"] = 0
+
+    if line_filter in ("ALP", "BET"):
+        df = df[df["line_code"] == line_filter]
+    if nature_filter in ("Live", "Non-live"):
+        df = df[df["nature"] == nature_filter]
+    if eclo_only:
+        df = df[df["eclo"] == 1]
+    if contract_filter != "All":
+        df = df[df["contract_number"] == contract_filter]
+
+    df = df[(df["week"] >= week_range[0]) & (df["week"] <= week_range[1])]
+
+    if df.empty:
+        fig = go.Figure()
+        return apply_chart_theme(fig, f"Activity Possession Timeline ({scenario_label}) - No matching activities", height=400)
+
+    h_start = datetime(2027, 1, 4)  # Week 1 starts Monday 2027-01-04
+
+    gantt_rows = []
+    sorted_act_ids = sorted(df["activity_id"].unique())
+
+    for act_id in sorted_act_ids:
+        grp = df[df["activity_id"] == act_id]
+        c_num = grp["contract_number"].iloc[0]
+        p_prio = grp["priority"].iloc[0]
+        nature = grp["nature"].iloc[0]
+        tot_acc = len(grp)
+        eclo_count = int(grp["eclo"].sum())
+
+        wks = sorted(grp["week"].unique().tolist())
+        intervals = group_consecutive_weeks(wks)
+
+        for w_s, w_e in intervals:
+            start_dt = h_start + timedelta(weeks=int(w_s) - 1)
+            end_dt = h_start + timedelta(weeks=int(w_e) - 1, days=6)
+            gantt_rows.append({
+                "Activity": act_id,
+                "Contract": c_num,
+                "Priority": f"P{p_prio}",
+                "Nature": nature,
+                "StartWeek": f"W{w_s:02d}",
+                "EndWeek": f"W{w_e:02d}",
+                "StartDate": start_dt,
+                "EndDate": end_dt,
+                "Total_Accesses": tot_acc,
+                "ECLO_Nights": eclo_count,
+            })
+
+    df_gantt = pd.DataFrame(gantt_rows)
+    num_scheduled = df["activity_id"].nunique()
+
+    fig = px.timeline(
+        df_gantt,
+        x_start="StartDate",
+        x_end="EndDate",
+        y="Activity",
+        color="Contract",
+        color_discrete_map=CONTRACT_COLORS,
+        category_orders={"Contract": sorted(list(CONTRACT_COLORS.keys()))},
+        hover_data=["Contract", "Priority", "Nature", "StartWeek", "EndWeek", "Total_Accesses", "ECLO_Nights"],
+        title=f"Activity Possession Timeline ({num_scheduled} Scheduled Activities)",
+    )
+
+    fig.update_yaxes(autorange="reversed")
+    fig.update_layout(
+        paper_bgcolor="#FFFFFF",
+        plot_bgcolor="#FFFFFF",
+        font=dict(color="#0F172A", family="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif"),
+        height=max(620, min(950, num_scheduled * 16 + 120)),
+        margin=dict(l=40, r=40, t=50, b=40),
+        legend=dict(
+            title=dict(text="Contract", font=dict(size=12, color="#0F172A")),
+            orientation="v",
+            yanchor="top",
+            y=0.98,
+            xanchor="left",
+            x=1.02,
+            font=dict(size=11, color="#334155"),
+            bgcolor="rgba(255, 255, 255, 0.9)",
+            bordercolor="#E2E8F0",
+            borderwidth=1,
+        ),
+        xaxis=dict(
+            gridcolor="#F1F5F9",
+            zerolinecolor="#E2E8F0",
+            linecolor="#CBD5E1",
+            tickfont=dict(color="#475569", size=11),
+            tickformat="%b %Y",
+            dtick="M1",
+        ),
+        yaxis=dict(
+            gridcolor="#F8FAFC",
+            linecolor="#CBD5E1",
+            tickfont=dict(color="#475569", size=10),
+            title=dict(text="Activity", font=dict(color="#0F172A", size=12)),
+        ),
+    )
+    return fig
 
 
 # ==============================================================================
@@ -211,7 +351,7 @@ def build_access_schedule_chart(
                 x=single_x,
                 y=single_y,
                 mode="markers",
-                marker=dict(symbol="square", size=14, color=single_colors, line=dict(width=1, color="#FFFFFF")),
+                marker=dict(symbol="square", size=14, color=single_colors, line=dict(width=1, color="#CBD5E1")),
                 hoverinfo="skip",
                 showlegend=False,
             ))
@@ -241,10 +381,10 @@ def build_access_schedule_chart(
                 x=[f"W{w:02d}" for w in std_df["week"]],
                 y=std_df["y_label"],
                 mode="markers",
-                marker=dict(symbol="circle", size=6, color="#FFFFFF", opacity=0.9),
+                marker=dict(symbol="circle", size=7, color="#0066CC", line=dict(width=1, color="#FFFFFF")),
                 text=std_hovers,
                 hoverinfo="text",
-                name="○ Weekly Access Point",
+                name="● Weekly Access Point",
             ))
 
     else:
@@ -269,7 +409,7 @@ def build_access_schedule_chart(
                 )
                 hover_texts.append(txt)
 
-            colors = [LINE_THEME[l]["color"] if l in LINE_THEME else "#38BDF8" for l in std_df["line_code"]]
+            colors = [LINE_THEME[l]["color"] if l in LINE_THEME else "#0284C7" for l in std_df["line_code"]]
             fig.add_trace(
                 go.Scatter(
                     x=[f"W{w:02d}" for w in std_df["week"]],
@@ -279,7 +419,7 @@ def build_access_schedule_chart(
                         symbol="square",
                         size=12,
                         color=colors,
-                        line=dict(width=1, color="#FFFFFF"),
+                        line=dict(width=1, color="#CBD5E1"),
                     ),
                     text=hover_texts,
                     hoverinfo="text",
@@ -316,9 +456,9 @@ def build_access_schedule_chart(
                 mode="markers",
                 marker=dict(
                     symbol="diamond",
-                    size=18,
+                    size=16,
                     color="#F59E0B",
-                    line=dict(width=2, color="#FEF08A"),
+                    line=dict(width=2, color="#B45309"),
                 ),
                 text=eclo_hovers,
                 hoverinfo="text",
@@ -365,7 +505,6 @@ def build_contract_gantt_chart(
     """
     Renders an executive-level 14-contract Gantt timeline.
     Displays each contract's execution window, planned completion target, and simulated finish.
-    Provides instant 30,000-ft program visibility with zero clutter.
     """
     fig = go.Figure()
     base_dt = datetime(2027, 1, 4)
@@ -418,7 +557,6 @@ def build_contract_gantt_chart(
     if not contract_rows:
         return apply_chart_theme(fig, f"Contract Executive Gantt ({scenario_label}) - No matching contracts", height=350)
 
-    # Traces:
     # 1. Execution window bars
     alp_x, alp_y, bet_x, bet_y = [], [], [], []
     for r in contract_rows:
@@ -459,7 +597,7 @@ def build_contract_gantt_chart(
         x=target_x,
         y=target_y,
         mode="markers",
-        marker=dict(symbol="diamond-tall", size=18, color="#FFFFFF", line=dict(width=2, color="#38BDF8")),
+        marker=dict(symbol="diamond-tall", size=18, color="#0066CC", line=dict(width=2, color="#003D99")),
         text=target_hovers,
         hoverinfo="text",
         name="🎯 Target Milestone Week",
@@ -468,9 +606,8 @@ def build_contract_gantt_chart(
     # 3. Completion Status Markers & Annotations
     for r in contract_rows:
         status_text = "✓ On-Time" if r["ov"] == 0 else f"⚠️ +{r['ov']}d Overrun"
-        status_color = "#34D399" if r["ov"] == 0 else "#FB7185"
+        status_color = "#059669" if r["ov"] == 0 else "#DC2626"
 
-        # Place label strictly to the right of whichever is furthest: execution end or target milestone
         ann_week = max(r["w_end"], r["p_week"])
 
         fig.add_annotation(
@@ -537,7 +674,7 @@ def build_contract_completion_chart(
     """
     Renders planned vs simulated completion dates using an accessible dumbbell chart.
     Dual visual encoding:
-    - Planned: White circle marker '○'
+    - Planned: Distinct open circle marker '○'
     - Simulated: Solid marker (Green diamond for on-time, Red square for overrun)
     - Overrun contracts explicitly labelled with '+X days' and warning icon
     """
@@ -565,7 +702,7 @@ def build_contract_completion_chart(
         p_date = pd.to_datetime(r["planned_completion_date"])
         s_date = pd.to_datetime(r["simulated_completion_date"])
 
-        line_color = "#FB7185" if ov > 0 else "#34D399"
+        line_color = "#DC2626" if ov > 0 else "#059669"
         line_dash = "dash" if ov > 0 else "solid"
 
         fig.add_trace(
@@ -588,8 +725,8 @@ def build_contract_completion_chart(
             marker=dict(
                 symbol="circle-open",
                 size=12,
-                color="#FFFFFF",
-                line=dict(width=2.5, color="#38BDF8"),
+                color="#0066CC",
+                line=dict(width=2.5, color="#0066CC"),
             ),
             name="○ Planned Contract Milestone",
             hovertemplate="<b>%{y} Planned Finish:</b> %{x|%Y-%m-%d}<extra></extra>",
@@ -604,10 +741,10 @@ def build_contract_completion_chart(
                 x=pd.to_datetime(ontime_df["simulated_completion_date"]),
                 y=ontime_df["contract_number"],
                 mode="markers+text",
-                marker=dict(symbol="diamond", size=13, color="#34D399", line=dict(width=1.5, color="#A7F3D0")),
+                marker=dict(symbol="diamond", size=13, color="#059669", line=dict(width=1.5, color="#047857")),
                 text=["  ✓ On-Time" for _ in range(len(ontime_df))],
                 textposition="middle right",
-                textfont=dict(color="#34D399", size=10),
+                textfont=dict(color="#059669", size=10),
                 name="◆ Simulated Finish: On-Time (0d Overrun)",
                 hovertemplate="<b>%{y} Simulated Finish:</b> %{x|%Y-%m-%d} (On-Time)<extra></extra>",
             )
@@ -622,10 +759,10 @@ def build_contract_completion_chart(
                 x=pd.to_datetime(overrun_df["simulated_completion_date"]),
                 y=overrun_df["contract_number"],
                 mode="markers+text",
-                marker=dict(symbol="square", size=14, color="#FB7185", line=dict(width=2, color="#FECDD3")),
+                marker=dict(symbol="square", size=14, color="#DC2626", line=dict(width=2, color="#991B1B")),
                 text=labels,
                 textposition="middle right",
-                textfont=dict(color="#FB7185", size=11, family="Arial Black"),
+                textfont=dict(color="#DC2626", size=11, family="Arial Black"),
                 name="■ Simulated Finish: Overrun (Penalty Applied)",
                 hovertemplate="<b>%{y} Overrun Finish:</b> %{x|%Y-%m-%d}<br>Delay: +%{customdata} days<extra></extra>",
                 customdata=overrun_df["overrun_days"],
@@ -662,23 +799,17 @@ def build_capacity_heatmap(
     Renders capacity utilisation heatmap.
     - Utilisation = (used possession slots / available supply slots) * 100%
     - Excess (>100%) has explicit annotation text '⚠️' and bold outline (WCAG 1.4.1 grayscale compliant)
-    - Zero supply marked as 'No Supply' / 'N/A'
     """
-    # 1. Compute used possessions grouped by (location_id, week) using distinct co-share groups
     used_counts = occ_df.groupby(["location_id", "week"])["co_share_group"].nunique().to_dict()
-
-    # 2. Build complete grid of (loc, week) with supply
     all_locs = sorted(list(dm.location_supply.keys()))
 
     records = []
     for loc in all_locs:
-        # Filter line
         if line_filter == "ALP" and "ALP" not in loc:
             continue
         if line_filter == "BET" and "BET" not in loc:
             continue
 
-        # Filter location type (PLAT vs SEC)
         if loc_type_filter == "Platform (PLAT)" and not loc.startswith("PLAT:"):
             continue
         if loc_type_filter == "Sector (SEC)" and not loc.startswith("SEC:"):
@@ -714,7 +845,6 @@ def build_capacity_heatmap(
         fig = go.Figure()
         return apply_chart_theme(fig, f"Capacity Heatmap ({scenario_label}) - No Data", height=400), pd.DataFrame()
 
-    # Apply display scope filter (Hotspots vs All)
     if display_mode == "Capacity Hotspots (Top 20)":
         hotspots = (
             full_df.groupby("location_id")["used"]
@@ -725,25 +855,23 @@ def build_capacity_heatmap(
         )
         full_df = full_df[full_df["location_id"].isin(hotspots)]
 
-    # Pivot for Heatmap
     if metric_choice == "Capacity Utilisation (%)":
         val_col = "utilisation"
         color_scale = [
-            [0.0, "#0F172A"],   # Neutral dark slate (0%)
-            [0.4, "#0284C7"],   # Normal usage (40%)
-            [0.75, "#0369A1"],  # High usage (75%)
-            [0.9, "#F59E0B"],   # Near capacity (90-100%)
-            [1.0, "#E11D48"],   # Over-capacity excess (>100%)
+            [0.0, "#F8FAFC"],
+            [0.4, "#BAE6FD"],
+            [0.75, "#0284C7"],
+            [0.9, "#F59E0B"],
+            [1.0, "#DC2626"],
         ]
         color_title = "Utilisation (%)"
     else:
         val_col = "used"
-        color_scale = "Plasma"
+        color_scale = "Blues"
         color_title = "Possessions (Count)"
 
     pivot = full_df.pivot(index="location_id", columns="week", values=val_col).fillna(0)
 
-    # Build custom hover texts and excess annotations
     hover_matrix = []
     text_matrix = []
     for loc in pivot.index:
@@ -761,7 +889,6 @@ def build_capacity_heatmap(
                     f"Excess: <b>{r['excess']} slots</b>"
                 )
                 loc_hovers.append(h)
-                # Only if excess > 0, display visible alert symbol in the cell
                 if r["excess"] > 0:
                     loc_texts.append("⚠️ EXCESS")
                 else:
@@ -810,18 +937,15 @@ def build_topology_schematic(
     line_code: str = "ALP",
 ) -> go.Figure:
     """
-    Renders an accessible railway line schematic distinguishing:
+    Renders an accessible railway line schematic in light mode distinguishing:
     - Stations, Platforms, Sections, and Interchange stations
     - Direct closure, Buffer closure, Mirrored closure, and Cross-line closure
-    - Each closure type has distinct line style, symbol, and explicit text legend (WCAG 1.4.1)
     """
     fig = go.Figure()
 
-    # 1. Base Track Schematic Layout
     stations = dm.stations.get(line_code, [])
     stn_x = {s.station_id: idx * 2.0 for idx, s in enumerate(stations)}
 
-    # Base track rail lines (EB and WB)
     x_coords = [stn_x[s.station_id] for s in stations]
     stn_ids = [s.station_id for s in stations]
 
@@ -831,10 +955,11 @@ def build_topology_schematic(
             x=x_coords,
             y=[1.0] * len(x_coords),
             mode="lines+markers+text",
-            line=dict(color="#334155", width=4),
-            marker=dict(symbol="square", size=10, color="#64748B"),
+            line=dict(color="#94A3B8", width=4),
+            marker=dict(symbol="square", size=10, color="#CBD5E1"),
             text=[f"{sid}<br>EB" for sid in stn_ids],
             textposition="top center",
+            textfont=dict(color="#334155", size=10),
             name="Track: Eastbound (EB)",
             hoverinfo="text",
         )
@@ -846,21 +971,21 @@ def build_topology_schematic(
             x=x_coords,
             y=[-1.0] * len(x_coords),
             mode="lines+markers+text",
-            line=dict(color="#334155", width=4),
-            marker=dict(symbol="square", size=10, color="#64748B"),
+            line=dict(color="#94A3B8", width=4),
+            marker=dict(symbol="square", size=10, color="#CBD5E1"),
             text=[f"{sid}<br>WB" for sid in stn_ids],
             textposition="bottom center",
+            textfont=dict(color="#334155", size=10),
             name="Track: Westbound (WB)",
             hoverinfo="text",
         )
     )
 
-    # 2. Overlay Safety Footprint if an activity is active
+    # Safety Footprint overlay
     if active_activity_id and active_activity_id in dm.activities:
         footprint = dm.get_safety_footprint(active_activity_id)
         act = dm.activities[active_activity_id]
 
-        # Direct Work Span
         direct_locs = footprint["work_span"]
         d_th = CLOSURE_THEME["direct"]
         fig.add_trace(
@@ -875,7 +1000,6 @@ def build_topology_schematic(
             )
         )
 
-        # Buffer Closure
         buf_locs = footprint["buffer_locations"]
         if buf_locs:
             b_th = CLOSURE_THEME["buffer"]
@@ -890,7 +1014,6 @@ def build_topology_schematic(
                 )
             )
 
-        # Mirror Closure
         mir_locs = footprint["mirror_locations"]
         if mir_locs:
             m_th = CLOSURE_THEME["mirror"]
@@ -906,7 +1029,6 @@ def build_topology_schematic(
                 )
             )
 
-        # Cross-Line Closure
         xline_locs = footprint["cross_line_locations"]
         if xline_locs:
             x_th = CLOSURE_THEME["cross_line"]

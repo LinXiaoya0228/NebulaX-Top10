@@ -332,13 +332,24 @@ class ScheduleValidator:
         }
 
 if __name__ == "__main__":
-    validator = ScheduleValidator()
+    import argparse
+    parser = argparse.ArgumentParser(description="Railway Track Access Schedule Validator")
+    parser.add_argument("--access", default="PS1/03_submission_sample/SCHEDULE_ACCESS.csv", help="Path to SCHEDULE_ACCESS.csv")
+    parser.add_argument("--occupancy", default="PS1/03_submission_sample/SCHEDULE_OCCUPANCY.csv", help="Path to SCHEDULE_OCCUPANCY.csv")
+    parser.add_argument("--results", default="PS1/03_submission_sample/RESULTS.csv", help="Path to RESULTS.csv")
+    parser.add_argument("--scenario", default=None, help="Scenario code (A, B, or C)")
+    parser.add_argument("--data_dir", default="PS1/01_data", help="Directory with problem instance data")
+    args = parser.parse_args()
+
+    validator = ScheduleValidator(args.data_dir)
     res = validator.validate(
-        "PS1/03_submission_sample/SCHEDULE_ACCESS.csv",
-        "PS1/03_submission_sample/SCHEDULE_OCCUPANCY.csv",
-        "PS1/03_submission_sample/RESULTS.csv"
+        args.access,
+        args.occupancy,
+        args.results,
+        scenario_override=args.scenario
     )
-    print("Validation Result for 03_submission_sample:")
+    target_name = args.access if args.access != "PS1/03_submission_sample/SCHEDULE_ACCESS.csv" else "03_submission_sample"
+    print(f"Validation Result for {target_name} (Scenario {res['scenario']}):")
     print("Feasible:", res["feasible"])
     print("Hard Violations:", len(res["hard_violations"]))
     if res["hard_violations"]:

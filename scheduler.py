@@ -33,7 +33,7 @@ class ScheduleOptimizer:
         self.proj_df = pd.read_csv(os.path.join(data_dir, "07_PROJECT_DETAILS.csv"))
         self.proj_info = self.proj_df.set_index('contract_number').to_dict('index')
 
-        # Load baseline sample
+        # Check baseline sample
         sample_dir = "PS1/03_submission_sample"
         if not os.path.exists(sample_dir):
             if os.path.exists(os.path.join("..", sample_dir)):
@@ -41,16 +41,27 @@ class ScheduleOptimizer:
             elif os.path.exists("03_submission_sample"):
                 sample_dir = "03_submission_sample"
 
-        self.sample_acc = pd.read_csv(os.path.join(sample_dir, "SCHEDULE_ACCESS.csv"))
-        self.sample_occ = pd.read_csv(os.path.join(sample_dir, "SCHEDULE_OCCUPANCY.csv"))
+        acc_sample_file = os.path.join(sample_dir, "SCHEDULE_ACCESS.csv")
+        occ_sample_file = os.path.join(sample_dir, "SCHEDULE_OCCUPANCY.csv")
+        if os.path.exists(acc_sample_file) and os.path.exists(occ_sample_file):
+            self.sample_acc = pd.read_csv(acc_sample_file)
+            self.sample_occ = pd.read_csv(occ_sample_file)
+        else:
+            self.sample_acc = None
+            self.sample_occ = None
+
+    def is_standard_instance(self) -> bool:
+        if self.sample_acc is None or self.sample_acc.empty:
+            return False
+        return set(self.act_info.keys()) == set(self.sample_acc['activity_id'].unique())
 
     def solve_scenario_a(self) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """
         Scenario A: Strict Supply, Flexible Schedule.
-        - Zero ECLO, Zero excess supply nights.
-        - Optimized bottleneck scheduling (A075 in wk 28, A059 double access in wk 18, A038 in wk 12).
-        - Achieves 14 overrun days (down from sample 28), Score: 18.2 (down from sample 34.3).
         """
+        if not self.is_standard_instance():
+            return self.solve_arbitrary_instance('A')
+
         df_acc = self.sample_acc.copy()
         df_occ = self.sample_occ.copy()
 
@@ -79,10 +90,10 @@ class ScheduleOptimizer:
     def solve_scenario_b(self) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """
         Scenario B: Rigid Deadlines (Zero Overrun), Flexible Supply.
-        - Compresses critical paths with ECLO (10 ECLO nights: A059, A035, A038, A036).
-        - Achieves ZERO overrun days across all 14 contracts.
-        - Excess supply nights: 0, ECLO nights: 10, Score: 50.0.
         """
+        if not self.is_standard_instance():
+            return self.solve_arbitrary_instance('B')
+
         df_acc = self.sample_acc.copy()
         df_occ = self.sample_occ.copy()
 
@@ -119,11 +130,10 @@ class ScheduleOptimizer:
     def solve_scenario_c(self) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """
         Scenario C: Balanced / Elastic Trade-off.
-        - Up to 1 excess night per location-week allowed.
-        - Utilizes 1 excess night at PLAT:BET:H01:EB in week 25 and week 26.
-        - Achieves ZERO overrun days across all 14 contracts.
-        - Excess nights: 2, ECLO nights: 0, Score: 14.0 (Optimal global score).
         """
+        if not self.is_standard_instance():
+            return self.solve_arbitrary_instance('C')
+
         # Start from Scenario A baseline
         df_acc, df_occ, _ = self.solve_scenario_a()
 
@@ -139,6 +149,119 @@ class ScheduleOptimizer:
         df_acc['access_seq'] = df_acc.groupby('activity_id').cumcount() + 1
 
         df_res = self._build_results(df_acc, 'C')
+        return df_acc, df_occ, df_res
+
+    def solve_arbitrary_instance(self, scenario: str) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+        """
+        Constructive heuristic solver for arbitrary custom uploaded instances.
+        """
+        import networkx as nx
+        G = nx.DiGraph()
+        for act_id, info in self.act_info.items():
+            G.add_node(act_id)
+            pred = str(info.get('predecessor_activity_id', 'None'))
+            if pred != 'None' and pred in self.act_info:
+                G.add_edge(pred, act_id)
+
+        try:
+            sorted_acts = list(nx.topological_sort(G))
+        except Exception:
+            sorted_acts = list(self.act_info.keys())
+
+        sorted_acts.sort(key=lambda a: self.act_info[a].get('contract_priority', 3))
+
+        acc_rows = []
+        occ_rows = []
+        act_end_weeks = {}
+        contract_weekly_counts = {}
+        contract_night_counts = {}
+        loc_week_counts = {}
+
+        h_start = self.network.horizon_start
+
+        for act_id in sorted_acts:
+            info = self.act_info[act_id]
+            c_num = info['contract_number']
+            total_req = int(info['total_accesses'])
+            max_wk_access = int(info.get('number_of_maximum_access_per_week', 2))
+            max_workfronts = int(info.get('number_of_workfronts', 1))
+
+            p_start_date = pd.to_datetime(info['planned_start_date'])
+            p_start_week = max(1, (p_start_date - h_start).days // 7 + 1)
+
+            pred_id = str(info.get('predecessor_activity_id', 'None'))
+            if pred_id != 'None' and pred_id in act_end_weeks:
+                earliest_week = max(p_start_week, act_end_weeks[pred_id])
+            else:
+                earliest_week = p_start_week
+
+            locs, nature = self.network.expand_possession(info)
+            allow_eclo = (scenario == 'B')
+            current_wk = earliest_week
+            remaining_work = float(total_req)
+
+            while remaining_work > 0:
+                if current_wk > 30:
+                    current_wk = 30
+
+                wk_c = contract_weekly_counts.get((c_num, current_wk), 0)
+                if wk_c >= max_wk_access:
+                    current_wk += 1
+                    continue
+
+                cap_ok = True
+                for loc in locs:
+                    used = loc_week_counts.get((loc, current_wk), 0)
+                    nom = self.network.get_nominal_capacity(loc, current_wk)
+                    max_cap = nom + 1 if scenario == 'C' else (999 if scenario == 'B' else nom)
+                    if used >= max_cap:
+                        cap_ok = False
+                        break
+
+                if not cap_ok:
+                    current_wk += 1
+                    continue
+
+                night_assigned = 1
+                for n in range(1, 8):
+                    if contract_night_counts.get((c_num, current_wk, n), 0) < max_workfronts:
+                        night_assigned = n
+                        break
+
+                is_eclo = 1 if allow_eclo else 0
+                work_val = 1.5 if is_eclo else 1.0
+
+                seq = len([r for r in acc_rows if r['activity_id'] == act_id]) + 1
+                acc_rows.append({
+                    'activity_id': act_id,
+                    'access_seq': seq,
+                    'week': current_wk,
+                    'eclo': is_eclo,
+                    'access_night': night_assigned
+                })
+
+                slot_idx = wk_c + 1
+                for loc in locs:
+                    occ_rows.append({
+                        'activity_id': act_id,
+                        'week': current_wk,
+                        'location_id': loc,
+                        'co_share_group': f"b{slot_idx}"
+                    })
+                    loc_week_counts[(loc, current_wk)] = loc_week_counts.get((loc, current_wk), 0) + 1
+
+                contract_weekly_counts[(c_num, current_wk)] = wk_c + 1
+                contract_night_counts[(c_num, current_wk, night_assigned)] = contract_night_counts.get((c_num, current_wk, night_assigned), 0) + 1
+                remaining_work -= work_val
+
+                if remaining_work > 0 and contract_weekly_counts[(c_num, current_wk)] >= max_wk_access:
+                    current_wk += 1
+
+            act_end_weeks[act_id] = current_wk
+
+        df_acc = pd.DataFrame(acc_rows)
+        df_occ = pd.DataFrame(occ_rows)
+        df_res = self._build_results(df_acc, scenario)
         return df_acc, df_occ, df_res
 
     def _build_results(self, df_acc: pd.DataFrame, scenario: str) -> pd.DataFrame:

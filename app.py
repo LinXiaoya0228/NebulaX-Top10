@@ -1,6 +1,7 @@
 import os
 import sys
 import io
+import shutil
 import zipfile
 import pandas as pd
 import plotly.express as px
@@ -31,9 +32,9 @@ st.markdown("""
         margin-bottom: 0.2rem;
     }
     .sub-title {
-        font-size: 1.1rem;
+        font-size: 1.05rem;
         color: #475569;
-        margin-bottom: 1.5rem;
+        margin-bottom: 1.2rem;
     }
     .metric-card {
         background-color: #F8FAFC;
@@ -43,35 +44,79 @@ st.markdown("""
         box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
     .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
+        gap: 6px;
     }
     .stTabs [data-baseweb="tab"] {
-        padding: 8px 16px;
+        padding: 8px 14px;
         border-radius: 4px;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# Cache Scheduler and Data Loading
-@st.cache_resource
-def get_engine():
-    data_dir = "PS1/01_data"
-    if not os.path.exists(data_dir):
-        if os.path.exists("01_data"):
-            data_dir = "01_data"
-        elif os.path.exists("../PS1/01_data"):
-            data_dir = "../PS1/01_data"
-    optimizer = ScheduleOptimizer(data_dir)
-    replanner = DisruptionReplanner(data_dir)
-    return optimizer, replanner
-
-optimizer, replanner = get_engine()
-
-# Sidebar
+# ----------------- DATASET SELECTION & UPLOAD HANDLER -----------------
 st.sidebar.image("https://img.icons8.com/color/96/subway.png", width=64)
 st.sidebar.title("NebulaX Controller")
 st.sidebar.markdown("**Dual-Line Railway Track Access Optimization**")
 
+st.sidebar.subheader("📂 Dataset & Instance Selection")
+
+# Initialize session state for dataset dir
+if 'data_dir' not in st.session_state:
+    st.session_state.data_dir = "PS1/01_data"
+    if not os.path.exists(st.session_state.data_dir):
+        if os.path.exists("01_data"):
+            st.session_state.data_dir = "01_data"
+        elif os.path.exists("../PS1/01_data"):
+            st.session_state.data_dir = "../PS1/01_data"
+
+data_source = st.sidebar.radio(
+    "Choose Dataset Source:",
+    ["Official Benchmark (PS1/01_data)", "Upload Custom Dataset (CSV/ZIP)"]
+)
+
+custom_dir = "uploaded_data"
+if data_source == "Upload Custom Dataset (CSV/ZIP)":
+    uploaded_files = st.sidebar.file_uploader(
+        "Upload Instance CSVs or .ZIP",
+        type=["csv", "zip"],
+        accept_multiple_files=True,
+        help="Upload the 8 instance CSVs or a zip file containing them."
+    )
+    if uploaded_files:
+        os.makedirs(custom_dir, exist_ok=True)
+        for uf in uploaded_files:
+            if uf.name.endswith(".zip"):
+                with zipfile.ZipFile(uf, 'r') as zf:
+                    zf.extractall(custom_dir)
+            else:
+                with open(os.path.join(custom_dir, uf.name), "wb") as f:
+                    f.write(uf.getbuffer())
+        
+        # Verify required files
+        req_files = ["07_PROJECT_DETAILS.csv", "08_ACTIVITY_DETAILS.csv"]
+        has_req = all(os.path.exists(os.path.join(custom_dir, rf)) for rf in req_files)
+        if has_req:
+            st.session_state.data_dir = custom_dir
+            st.sidebar.success("Custom dataset loaded successfully!")
+        else:
+            st.sidebar.warning(f"Uploaded files missing: {[rf for rf in req_files if not os.path.exists(os.path.join(custom_dir, rf))]}")
+else:
+    # Reset to default
+    if os.path.exists("PS1/01_data"):
+        st.session_state.data_dir = "PS1/01_data"
+    elif os.path.exists("01_data"):
+        st.session_state.data_dir = "01_data"
+
+# Initialize Engines with active dataset
+@st.cache_resource
+def get_engine(data_path: str):
+    optimizer = ScheduleOptimizer(data_path)
+    replanner = DisruptionReplanner(data_path)
+    return optimizer, replanner
+
+optimizer, replanner = get_engine(st.session_state.data_dir)
+
+# Sidebar controls
 active_scenario = st.sidebar.selectbox(
     "Active Scenario",
     ["Scenario A (Strict Supply)", "Scenario B (Zero Overrun)", "Scenario C (Balanced Trade-off)"],
@@ -80,24 +125,25 @@ active_scenario = st.sidebar.selectbox(
 sc_code = active_scenario[9] # 'A', 'B', or 'C'
 
 st.sidebar.divider()
-st.sidebar.markdown("### Instance Dataset")
-st.sidebar.info(f"Loaded instance from: `{optimizer.data_dir}`\n- Lines: Alpha & Beta\n- Horizon: 30 Weeks\n- Activities: 54\n- Contracts: 14")
+st.sidebar.markdown(f"**Current Dataset**: `{st.session_state.data_dir}`")
+st.sidebar.caption(f"Contracts: {len(optimizer.proj_info)} | Activities: {len(optimizer.act_info)}")
 
-# Main Header
+# ----------------- MAIN HEADER -----------------
 st.markdown("<div class='main-title'>🚇 NebulaX: Railway Track Access Optimization & Decision Support</div>", unsafe_allow_html=True)
 st.markdown("<div class='sub-title'>High-performance constraint satisfaction engine for LTA dual-line night-possession scheduling.</div>", unsafe_allow_html=True)
 
 # Generate Data for the 3 Scenarios
 @st.cache_data
-def get_schedules():
-    acc_a, occ_a, res_a = optimizer.solve_scenario_a()
-    rep_a = optimizer.validator.validate(acc_a, occ_a, res_a, 'A')
+def get_schedules(data_path: str):
+    opt = ScheduleOptimizer(data_path)
+    acc_a, occ_a, res_a = opt.solve_scenario_a()
+    rep_a = opt.validator.validate(acc_a, occ_a, res_a, 'A')
 
-    acc_b, occ_b, res_b = optimizer.solve_scenario_b()
-    rep_b = optimizer.validator.validate(acc_b, occ_b, res_b, 'B')
+    acc_b, occ_b, res_b = opt.solve_scenario_b()
+    rep_b = opt.validator.validate(acc_b, occ_b, res_b, 'B')
 
-    acc_c, occ_c, res_c = optimizer.solve_scenario_c()
-    rep_c = optimizer.validator.validate(acc_c, occ_c, res_c, 'C')
+    acc_c, occ_c, res_c = opt.solve_scenario_c()
+    rep_c = opt.validator.validate(acc_c, occ_c, res_c, 'C')
 
     return {
         'A': (acc_a, occ_a, res_a, rep_a),
@@ -105,14 +151,15 @@ def get_schedules():
         'C': (acc_c, occ_c, res_c, rep_c)
     }
 
-schedules = get_schedules()
+schedules = get_schedules(st.session_state.data_dir)
 acc_curr, occ_curr, res_curr, rep_curr = schedules[sc_code]
 scores = rep_curr['soft_scores']
 
 # Top KPI Summary Row
 col1, col2, col3, col4, col5 = st.columns(5)
 with col1:
-    st.metric("Schedule Feasibility", "PASS (100%)", delta=f"{len(rep_curr['hard_violations'])} hard violations")
+    v_count = len(rep_curr['hard_violations'])
+    st.metric("Schedule Feasibility", "PASS (100%)" if v_count == 0 else f"{v_count} ERRORS", delta=f"{v_count} hard violations")
 with col2:
     st.metric("Total Overrun", f"{scores['overrun_days_total']} days", delta=f"{scores['contracts_overrunning']} contracts late", delta_color="inverse")
 with col3:
@@ -120,14 +167,15 @@ with col3:
 with col4:
     st.metric("ECLO Compressed", f"{scores['eclo_nights_total']} nights", delta=f"${scores['eclo_nights_total']*5}")
 with col5:
-    st.metric("Objective Score", f"{scores['objective_score']:.1f}", delta=f"{sc_code} Target Met")
+    st.metric("Objective Score", f"{scores['objective_score']:.1f}", delta=f"{sc_code} Evaluated")
 
 # Navigation Tabs
-tab_gantt, tab_compare, tab_disrupt, tab_occupancy, tab_rules, tab_download = st.tabs([
+tab_gantt, tab_compare, tab_disrupt, tab_occupancy, tab_network, tab_rules, tab_download = st.tabs([
     "📅 Interactive Schedule & Gantt",
     "📊 Scenario Comparison (A vs B vs C)",
     "⚠️ Dynamic Disruption Re-planner",
     "🗺️ Spatial Heatmap & Bottlenecks",
+    "🚊 Network Topology Map",
     "🛡️ 10-Rule Safety Verification",
     "📥 Submission Files Export"
 ])
@@ -138,10 +186,11 @@ with tab_gantt:
 
     col_f1, col_f2, col_f3 = st.columns([2, 2, 2])
     with col_f1:
+        contract_options = sorted(optimizer.proj_df['contract_number'].unique())
         contract_filter = st.multiselect(
             "Filter by Contract",
-            options=sorted(optimizer.proj_df['contract_number'].unique()),
-            default=sorted(optimizer.proj_df['contract_number'].unique())
+            options=contract_options,
+            default=contract_options
         )
     with col_f2:
         line_filter = st.multiselect(
@@ -156,8 +205,8 @@ with tab_gantt:
     gantt_rows = []
     h_start = optimizer.network.horizon_start
 
-    # Merge activity details
-    m_acc = pd.merge(acc_curr, optimizer.df_merged, on='activity_id')
+    # Merge activity details safely
+    m_acc = pd.merge(acc_curr, optimizer.df_merged, on='activity_id', how='left')
     filtered_acc = m_acc[
         (m_acc['contract_number'].isin(contract_filter)) &
         (m_acc['week'] >= week_range[0]) &
@@ -166,11 +215,18 @@ with tab_gantt:
 
     for act_id, grp in filtered_acc.groupby('activity_id'):
         c_num = grp['contract_number'].iloc[0]
-        p_prio = grp['contract_priority'].iloc[0]
+        p_prio = grp['contract_priority'].iloc[0] if 'contract_priority' in grp.columns else 3
         min_w = grp['week'].min()
         max_w = grp['week'].max()
         eclo_count = grp['eclo'].sum()
-        nature = grp['nature_of_work'].iloc[0]
+        
+        # Resilient lookup for nature/type
+        if 'nature_of_activity' in grp.columns and pd.notna(grp['nature_of_activity'].iloc[0]):
+            nature = str(grp['nature_of_activity'].iloc[0])
+        elif 'activity_type' in grp.columns and pd.notna(grp['activity_type'].iloc[0]):
+            nature = str(grp['activity_type'].iloc[0])
+        else:
+            nature = "Civil/Track"
 
         start_dt = h_start + timedelta(weeks=int(min_w) - 1)
         end_dt = h_start + timedelta(weeks=int(max_w) - 1, days=6)
@@ -206,7 +262,6 @@ with tab_gantt:
     else:
         st.warning("No activities match the selected filters.")
 
-    # Show tabular results
     with st.expander("View Simulated Contract Completion Dates & Overruns"):
         st.dataframe(res_curr.style.highlight_max(subset=['overrun_days'], color='#FFE4E6'), use_container_width=True)
 
@@ -222,7 +277,7 @@ with tab_compare:
             'Scenario': sc_name,
             'Feasible': "Yes (0 violations)",
             'Overrun Days': sc_scores['overrun_days_total'],
-            'Contracts Late': f"{sc_scores['contracts_overrunning']} / 14",
+            'Contracts Late': f"{sc_scores['contracts_overrunning']} / {len(res)}",
             'Excess Nights ($7/ea)': sc_scores['excess_access_nights_total'],
             'ECLO Nights ($5/ea)': sc_scores['eclo_nights_total'],
             'Priority Overrun Penalty': sc_scores['priority_weighted_score'],
@@ -232,7 +287,6 @@ with tab_compare:
     df_comp = pd.DataFrame(comp_data)
     st.dataframe(df_comp, use_container_width=True)
 
-    # Bar chart comparison
     col_c1, col_c2 = st.columns(2)
     with col_c1:
         fig_bar1 = px.bar(
@@ -265,11 +319,14 @@ with tab_disrupt:
     """)
 
     col_d1, col_d2, col_d3 = st.columns(3)
+    loc_options = sorted(optimizer.network.locations.keys())
+    default_loc = "SEC:BET:S14_H01:EB" if "SEC:BET:S14_H01:EB" in loc_options else loc_options[0]
+
     with col_d1:
         blocked_loc = st.selectbox(
             "Blocked Track / Station Sector",
-            options=sorted(optimizer.network.locations.keys()),
-            index=sorted(optimizer.network.locations.keys()).index("SEC:BET:S14_H01:EB")
+            options=loc_options,
+            index=loc_options.index(default_loc)
         )
     with col_d2:
         d_start = st.number_input("Disruption Start Week", min_value=1, max_value=30, value=22)
@@ -305,7 +362,6 @@ with tab_occupancy:
     st.subheader("Spatial Track Possession Heatmap")
     st.markdown("Identifies track congestion hotspots and capacity utilization across all 30 weeks.")
 
-    # Aggregate occupancy per location and week
     occ_counts = occ_curr.groupby(['location_id', 'week']).size().reset_index(name='possessions')
     pivot_occ = occ_counts.pivot(index='location_id', columns='week', values='possessions').fillna(0)
 
@@ -320,7 +376,50 @@ with tab_occupancy:
     fig_heat.update_layout(height=800)
     st.plotly_chart(fig_heat, use_container_width=True)
 
-# ----------------- TAB 5: 10-RULE SAFETY VERIFICATION -----------------
+# ----------------- TAB 5: NETWORK TOPOLOGY MAP -----------------
+with tab_network:
+    st.subheader("Official Dual-Line Network Topology & Safety Interlocking")
+    st.markdown("""
+    **Network Architecture Overview:**
+    - **Line Alpha (Red Line)**: Stations `S01` to `S08` via interchange stations `H01` and `H02`.
+    - **Line Beta (Green Line)**: Stations `S11` to `S18` via interchange stations `H01` and `H02`.
+    - **Directional Bounds**: Eastbound (`EB`) and Westbound (`WB`) with independent track capacity.
+    - **Safety Closure Interlock**: Live traction isolation triggers a **2-sector physical closure**, opposite-bound mirroring, and cross-line closure between `H01` and `H02`.
+    """)
+
+    # Render official SVG topology
+    svg_candidates = [
+        "PS1/02_references/network_diagram.svg",
+        "../PS1/02_references/network_diagram.svg",
+        "02_references/network_diagram.svg"
+    ]
+    svg_found = None
+    for p in svg_candidates:
+        if os.path.exists(p):
+            svg_found = p
+            break
+
+    if svg_found:
+        with open(svg_found, "r", encoding="utf-8") as f:
+            svg_content = f.read()
+        st.markdown(f'<div style="background-color:#0f172a; border-radius:10px; padding:15px; margin-bottom:20px;">{svg_content}</div>', unsafe_allow_html=True)
+    else:
+        st.info("Topology diagram file not found at reference path.")
+
+    # Location summary table
+    st.markdown("#### Track Locations & Physical Supply Capacities")
+    loc_table = []
+    for loc_id, loc_obj in optimizer.network.locations.items():
+        loc_table.append({
+            'Location ID': loc_id,
+            'Line': loc_obj.line,
+            'Type': loc_obj.loc_type,
+            'Bound': loc_obj.bound,
+            'Adjacent Locations': ", ".join(loc_obj.adj_list)
+        })
+    st.dataframe(pd.DataFrame(loc_table), height=350, use_container_width=True)
+
+# ----------------- TAB 6: 10-RULE SAFETY VERIFICATION -----------------
 with tab_rules:
     st.subheader("10-Rule Mathematical Safety Verification Audit")
     st.markdown("Every schedule is rigorously checked against all 10 domain rules from Problem Statement 1.")
@@ -343,7 +442,7 @@ with tab_rules:
             st.markdown(f"**Specification**: {rule_desc}")
             st.markdown("**Status**: Passed with 0 violations.")
 
-# ----------------- TAB 6: SUBMISSION EXPORT -----------------
+# ----------------- TAB 7: SUBMISSION EXPORT -----------------
 with tab_download:
     st.subheader("Official Submission File Center")
     st.markdown("Download generated LTA-compliant CSV deliverables ready for automated scoring.")
@@ -358,7 +457,6 @@ with tab_download:
             st.markdown(f"- `SCHEDULE_OCCUPANCY.csv` ({len(sc_occ)} rows)")
             st.markdown(f"- `RESULTS.csv` ({len(sc_res)} rows)")
 
-            # Create in-memory zip
             zip_buffer = io.BytesIO()
             with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
                 zip_file.writestr("SCHEDULE_ACCESS.csv", sc_acc.to_csv(index=False))

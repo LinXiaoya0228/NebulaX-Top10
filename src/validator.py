@@ -104,8 +104,10 @@ class Validator:
                     HardViolation(rule="schema", detail=f"Unknown activity in schedule: {act_id}")
                 )
                 continue
-            locations = self.graph.expand_activity_occupancy(
-                act.start_location_id, act.end_location_id
+            locations = set(
+                self.graph.expand_activity_occupancy(
+                    act.start_location_id, act.end_location_id
+                )
             )
             for week in weeks:
                 expected_occupancy.update((act_id, week, loc) for loc in locations)
@@ -158,7 +160,47 @@ class Validator:
                             )
                         )
 
-        # 4. Weekly Allocation & 5. Workfronts
+        # 4. Live mirror and cross-line interchange closures
+        activities_by_week: Dict[int, Set[str]] = {}
+        for act_id, weeks in activity_weeks.items():
+            for week in weeks:
+                activities_by_week.setdefault(week, set()).add(act_id)
+
+        for closure_act_id, weeks in activity_weeks.items():
+            closure_act = self.instance.activities.get(closure_act_id)
+            if closure_act is None:
+                continue
+            contract = self.instance.contracts[closure_act.contract_number]
+            if contract.nature_of_activity != "Live":
+                continue
+
+            closure_types = (
+                "mirror",
+                "interchange",
+            )
+            for week in sorted(set(weeks)):
+                other_activities = activities_by_week.get(week, set()) - {closure_act_id}
+                for closure_type in closure_types:
+                    intruders = sorted(
+                        act_id
+                        for act_id in other_activities
+                        if closure_type
+                        in self.rules.closure_conflict_types(
+                            closure_act_id, act_id
+                        )
+                    )
+                    if intruders:
+                        hard_violations.append(
+                            HardViolation(
+                                rule="closure",
+                                detail=(
+                                    f"wk{week}: {intruders} inside Live {closure_type} "
+                                    f"closure of {closure_act_id}"
+                                ),
+                            )
+                        )
+
+        # 5. Weekly Allocation & 6. Workfronts
         # Group accesses by (contract, week, access_night)
         access_by_contract_week: Dict[Tuple[str, int], Set[int]] = {}
         activities_by_night: Dict[Tuple[str, int, int], List[str]] = {}

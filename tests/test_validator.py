@@ -21,7 +21,7 @@ def test_scenario_a():
         submission_dir=base_dir / "results" / "scenario_A",
         scenario="A",
     )
-    assert report.feasible is True, f"Scenario A failed: {[v.detail for v in report.hard_violations]}"
+    assert report.feasible is True, [v.detail for v in report.hard_violations]
     assert len(report.hard_violations) == 0
     assert report.soft_scores["eclo_nights_total"] == 0, "Scenario A cannot have ECLO"
     assert report.soft_scores["excess_access_nights_total"] == 0, "Scenario A cannot have excess capacity"
@@ -36,7 +36,7 @@ def test_scenario_b():
         submission_dir=base_dir / "results" / "scenario_B",
         scenario="B",
     )
-    assert report.feasible is True, f"Scenario B failed: {[v.detail for v in report.hard_violations]}"
+    assert report.feasible is True, [v.detail for v in report.hard_violations]
     assert len(report.hard_violations) == 0
     assert report.soft_scores["overrun_days_total"] == 0, "Scenario B requires 0 overrun days"
     assert report.soft_scores["contracts_overrunning"] == 0
@@ -49,7 +49,7 @@ def test_scenario_c():
         submission_dir=base_dir / "results" / "scenario_C",
         scenario="C",
     )
-    assert report.feasible is True, f"Scenario C failed: {[v.detail for v in report.hard_violations]}"
+    assert report.feasible is True, [v.detail for v in report.hard_violations]
     assert len(report.hard_violations) == 0
     assert report.soft_scores["excess_access_nights_total"] <= 14, "Scenario C capacity within tolerance"
 

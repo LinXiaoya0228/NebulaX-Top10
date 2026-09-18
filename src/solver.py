@@ -1,4 +1,5 @@
 from datetime import datetime
+from itertools import combinations
 from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
@@ -93,6 +94,16 @@ class TrackAccessSolver:
                         + selected[successor.activity_id, successor_week]
                         <= 1
                     )
+
+        closure_conflicts = [
+            (first.activity_id, second.activity_id)
+            for first, second in combinations(activities, 2)
+            if self.rules.closure_conflict_types(first.activity_id, second.activity_id)
+            or self.rules.closure_conflict_types(second.activity_id, first.activity_id)
+        ]
+        for first_id, second_id in closure_conflicts:
+            for week in weeks:
+                model.Add(selected[first_id, week] + selected[second_id, week] <= 1)
 
         assignments: Dict[Tuple[str, int, str, int], cp_model.IntVar] = {}
         excess_terms: List[cp_model.IntVar] = []

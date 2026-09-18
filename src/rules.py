@@ -130,6 +130,22 @@ class RuleEngine:
 
         return True
 
+    def closure_conflict_types(
+        self, closure_act_id: str, other_act_id: str
+    ) -> List[str]:
+        """Return Live closure types entered by another activity's physical footprint."""
+        closure = self.activity_footprints[closure_act_id]
+        other_physical = set(self.activity_footprints[other_act_id].physical_occupancy)
+        conflicts: List[str] = []
+
+        mirror_overlap = other_physical.intersection(closure.mirrored_locations)
+        if any(location.startswith("SEC:") for location in mirror_overlap):
+            conflicts.append("mirror")
+        if other_physical.intersection(closure.cross_line_locations):
+            conflicts.append("interchange")
+
+        return conflicts
+
     def are_independent(self, act_id1: str, act_id2: str) -> bool:
         """
         Check if two activities have zero spatial conflict (their complete footprints do not overlap).

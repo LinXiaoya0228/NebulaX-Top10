@@ -48,16 +48,16 @@ CONTRACT_COLORS = {
 # Line Encoding: ALWAYS pair color with explicit text tag [ALP] / [BET]
 LINE_THEME = {
     "ALP": {
-        "color": "#0284C7",
-        "bg": "#E0F2FE",
-        "border": "#7DD3FC",
+        "color": "#2563EB",       # Executive Sapphire Blue (Tailwind Blue-600)
+        "bg": "#EFF6FF",          # Soft Blue-50 surface
+        "border": "#BFDBFE",      # Blue-200 border
         "text_tag": "[ALP] Alpha Line",
         "icon": "🔵",
     },
     "BET": {
-        "color": "#7C3AED",
-        "bg": "#EDE9FE",
-        "border": "#C4B5FD",
+        "color": "#7C3AED",       # Refined Slate Violet (Tailwind Violet-600)
+        "bg": "#F5F3FF",          # Soft Violet-50 surface
+        "border": "#DDD6FE",      # Violet-200 border
         "text_tag": "[BET] Beta Line",
         "icon": "🟣",
     },

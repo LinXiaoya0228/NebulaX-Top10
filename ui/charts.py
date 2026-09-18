@@ -306,7 +306,8 @@ def build_access_schedule_chart(
         # Draw connected work capsules for contiguous runs of weeks
         alp_x_lines, alp_y_lines = [], []
         bet_x_lines, bet_y_lines = [], []
-        single_x, single_y, single_colors = [], [], []
+        alp_single_x, alp_single_y = [], []
+        bet_single_x, bet_single_y = [], []
 
         for y_lbl in unique_labels:
             sub = df[df["y_label"] == y_lbl]
@@ -323,17 +324,20 @@ def build_access_schedule_chart(
                         bet_x_lines.extend([f"W{w_start:02d}", f"W{w_end:02d}", None])
                         bet_y_lines.extend([y_lbl, y_lbl, None])
                 else:
-                    single_x.append(f"W{w_start:02d}")
-                    single_y.append(y_lbl)
-                    single_colors.append(LINE_THEME["ALP"]["color"] if line_c == "ALP" else LINE_THEME["BET"]["color"])
+                    if line_c == "ALP":
+                        alp_single_x.append(f"W{w_start:02d}")
+                        alp_single_y.append(y_lbl)
+                    else:
+                        bet_single_x.append(f"W{w_start:02d}")
+                        bet_single_y.append(y_lbl)
 
-        # Add continuous capsule bars
+        # Add continuous capsule bars (smooth width 13 for executive elegance)
         if alp_x_lines:
             fig.add_trace(go.Scatter(
                 x=alp_x_lines,
                 y=alp_y_lines,
                 mode="lines",
-                line=dict(width=16, color=LINE_THEME["ALP"]["color"]),
+                line=dict(width=13, color=LINE_THEME["ALP"]["color"]),
                 hoverinfo="skip",
                 name="[ALP] Alpha Work Capsule",
             ))
@@ -342,32 +346,41 @@ def build_access_schedule_chart(
                 x=bet_x_lines,
                 y=bet_y_lines,
                 mode="lines",
-                line=dict(width=16, color=LINE_THEME["BET"]["color"]),
+                line=dict(width=13, color=LINE_THEME["BET"]["color"]),
                 hoverinfo="skip",
                 name="[BET] Beta Work Capsule",
             ))
-        if single_x:
+        # Single-week accesses rendered as circular capsule pills of matching diameter
+        if alp_single_x:
             fig.add_trace(go.Scatter(
-                x=single_x,
-                y=single_y,
+                x=alp_single_x,
+                y=alp_single_y,
                 mode="markers",
-                marker=dict(symbol="square", size=14, color=single_colors, line=dict(width=1, color="#CBD5E1")),
+                marker=dict(symbol="circle", size=13, color=LINE_THEME["ALP"]["color"], line=dict(width=1.5, color="#FFFFFF")),
+                hoverinfo="skip",
+                showlegend=False,
+            ))
+        if bet_single_x:
+            fig.add_trace(go.Scatter(
+                x=bet_single_x,
+                y=bet_single_y,
+                mode="markers",
+                marker=dict(symbol="circle", size=13, color=LINE_THEME["BET"]["color"], line=dict(width=1.5, color="#FFFFFF")),
                 hoverinfo="skip",
                 showlegend=False,
             ))
 
-        # Add individual weekly access markers along the capsules
+        # Add individual weekly access markers along the capsules (harmonized pearl markers per line)
         std_df = df[~df["is_eclo"]]
         if not std_df.empty:
-            std_hovers = []
-            for _, r in std_df.iterrows():
+            def _build_hover(r):
                 aid = r["activity_id"]
                 act = dm.activities.get(aid)
                 locs_str = ", ".join(list(act.expanded_locations)[:3]) + ("..." if act and len(act.expanded_locations) > 3 else "") if act else ""
                 seq_val = r.get("access_seq", r.get("access_sequence", 1))
                 night_val = r.get("access_night", 1)
                 co_share = r.get("co_share_group", "Independent")
-                txt = (
+                return (
                     f"<b>{aid}</b> ({r['contract_number']})<br>"
                     f"Line: {r['line_code']} ({r['bound']}) | Nature: {r['nature']}<br>"
                     f"Week: <b>W{r['week']:02d}</b> (Access #{seq_val}, Night {night_val})<br>"
@@ -375,17 +388,33 @@ def build_access_schedule_chart(
                     f"Locations: {locs_str}<br>"
                     f"Co-share Group: {co_share}"
                 )
-                std_hovers.append(txt)
 
-            fig.add_trace(go.Scatter(
-                x=[f"W{w:02d}" for w in std_df["week"]],
-                y=std_df["y_label"],
-                mode="markers",
-                marker=dict(symbol="circle", size=7, color="#0066CC", line=dict(width=1, color="#FFFFFF")),
-                text=std_hovers,
-                hoverinfo="text",
-                name="● Weekly Access Point",
-            ))
+            alp_std = std_df[std_df["line_code"] == "ALP"]
+            bet_std = std_df[std_df["line_code"] == "BET"]
+
+            if not alp_std.empty:
+                alp_hovers = [_build_hover(r) for _, r in alp_std.iterrows()]
+                fig.add_trace(go.Scatter(
+                    x=[f"W{w:02d}" for w in alp_std["week"]],
+                    y=alp_std["y_label"],
+                    mode="markers",
+                    marker=dict(symbol="circle", size=6, color="#FFFFFF", line=dict(width=1.5, color=LINE_THEME["ALP"]["color"])),
+                    text=alp_hovers,
+                    hoverinfo="text",
+                    name="● Alpha Access Point",
+                ))
+
+            if not bet_std.empty:
+                bet_hovers = [_build_hover(r) for _, r in bet_std.iterrows()]
+                fig.add_trace(go.Scatter(
+                    x=[f"W{w:02d}" for w in bet_std["week"]],
+                    y=bet_std["y_label"],
+                    mode="markers",
+                    marker=dict(symbol="circle", size=6, color="#FFFFFF", line=dict(width=1.5, color=LINE_THEME["BET"]["color"])),
+                    text=bet_hovers,
+                    hoverinfo="text",
+                    name="● Beta Access Point",
+                ))
 
     else:
         # Discrete point view
@@ -409,21 +438,21 @@ def build_access_schedule_chart(
                 )
                 hover_texts.append(txt)
 
-            colors = [LINE_THEME[l]["color"] if l in LINE_THEME else "#0284C7" for l in std_df["line_code"]]
+            colors = [LINE_THEME[l]["color"] if l in LINE_THEME else "#2563EB" for l in std_df["line_code"]]
             fig.add_trace(
                 go.Scatter(
                     x=[f"W{w:02d}" for w in std_df["week"]],
                     y=std_df["y_label"],
                     mode="markers",
                     marker=dict(
-                        symbol="square",
-                        size=12,
+                        symbol="circle",
+                        size=9,
                         color=colors,
-                        line=dict(width=1, color="#CBD5E1"),
+                        line=dict(width=1, color="#FFFFFF"),
                     ),
                     text=hover_texts,
                     hoverinfo="text",
-                    name="■ Standard Access (3.5h)",
+                    name="● Standard Access (3.5h)",
                 )
             )
 
@@ -857,20 +886,43 @@ def build_capacity_heatmap(
 
     if metric_choice == "Capacity Utilisation (%)":
         val_col = "utilisation"
-        color_scale = [
-            [0.0, "#F8FAFC"],
-            [0.4, "#BAE6FD"],
-            [0.75, "#0284C7"],
-            [0.9, "#F59E0B"],
-            [1.0, "#DC2626"],
-        ]
         color_title = "Utilisation (%)"
     else:
         val_col = "used"
-        color_scale = "Blues"
         color_title = "Possessions (Count)"
 
     pivot = full_df.pivot(index="location_id", columns="week", values=val_col).fillna(0)
+
+    if metric_choice == "Capacity Utilisation (%)":
+        max_val = float(pivot.values.max()) if not pivot.empty else 100.0
+        if max_val > 100.0:
+            scale_100 = 100.0 / max_val
+            color_scale = [
+                [0.0, "#F8FAFC"],              # 0% - Clean slate canvas
+                [0.25 * scale_100, "#DBEAFE"],  # 25% - Soft mist blue
+                [0.55 * scale_100, "#60A5FA"],  # 55% - Light cobalt blue
+                [0.85 * scale_100, "#2563EB"],  # 85% - Vibrant blue
+                [scale_100, "#1E293B"],         # 100% - Deep Slate Navy (Full Normal Capacity)
+                [1.0, "#DC2626"],               # >100% - Over-capacity excess alert
+            ]
+        else:
+            color_scale = [
+                [0.0, "#F8FAFC"],   # 0% - Clean slate canvas
+                [0.2, "#DBEAFE"],   # 20% - Soft whisper blue
+                [0.4, "#93C5FD"],   # 40% - Light azure
+                [0.6, "#38BDF8"],   # 60% - Vibrant cyan blue
+                [0.8, "#2563EB"],   # 80% - Rich cobalt blue
+                [1.0, "#1E293B"],   # 100% - Deep Executive Slate Navy
+            ]
+    else:
+        color_scale = [
+            [0.0, "#F8FAFC"],
+            [0.2, "#DBEAFE"],
+            [0.4, "#93C5FD"],
+            [0.6, "#38BDF8"],
+            [0.8, "#2563EB"],
+            [1.0, "#1E293B"],
+        ]
 
     hover_matrix = []
     text_matrix = []

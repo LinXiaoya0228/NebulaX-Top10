@@ -136,7 +136,7 @@ The platform provides a dedicated panel on **Page 8 (`Validator & Downloads`)** 
 
 ---
 
-## 💡 Engineering Highlights & "Little Touches" (小巧思)
+## 💡 Engineering Highlights & "Little Touches" 
 
 1. **Executive Sequential Gradient (No More "Sea of Red"):**
    Traditional tools color 100% capacity red, causing every busy sector in a 20-week schedule to look like an emergency. Our capacity heatmap uses an executive blue-to-navy sequential ramp, where 100% full capacity is rendered in deep Slate Navy (`#1E293B`), reserving alarm crimson strictly for true illegal over-capacity (>100%).

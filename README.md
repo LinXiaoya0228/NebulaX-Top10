@@ -415,6 +415,6 @@ The interface is engineered according to **WCAG 2.2 AA Accessibility Standards**
 
 ## 👥 Authors & Acknowledgments
 
-- **Team:** NebulaX Top-10
+- **Team:** NebulaX Top-10 (Lin Xiaoya, Wang Siwen, Wu Yiqian)
 - **Competition:** LTA NebulaX 2026 Hackathon
 - **Special Thanks:** Land Transport Authority (LTA) Singapore for the comprehensive problem formulation, real-world data schemas, and rigorous validator suite.

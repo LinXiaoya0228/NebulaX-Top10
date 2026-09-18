@@ -97,3 +97,4 @@
 2. Browser resolution set to 1920x1080 (100% zoom).
 3. Use a clear microphone with background noise suppression.
 4. Record with OBS Studio or Windows Game Bar (Win + Alt + R).
+

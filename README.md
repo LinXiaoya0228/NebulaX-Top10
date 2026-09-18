@@ -27,6 +27,16 @@ Between midnight passenger shutdown and 05:00 morning train launch, Singapore's 
 
 ---
 
+> [!TIP]
+> ### 🕹️ For Hackathon Reviewers & Judges: Live Evaluation & Custom Instance Ingestion
+> You can evaluate any undisclosed benchmark dataset live in the web application without command-line execution:
+> - **Sidebar Switcher**: Select **`📤 Upload Custom Instance (CSVs / ZIP)`** under *Dataset & Instance* in the left navigation drawer.
+> - **Dedicated Evaluation Console**: On **Page 8 (`Validator & Downloads`)**, expand the **Reviewer / Judge Live Evaluation Panel**.
+> - **Instant Automatic Resilience**: Upload all 8 CSVs or a single `.zip` file. If only work demand files (`07` & `08`) are uploaded, the system automatically backfills standard dual-line network topology files (`01` through `06`).
+> - **Live CP-SAT Execution (<1.5s)**: Click **`🚀 Run Live Optimization & Validation`** to solve live on-screen, trigger the official 14-rule mathematical validator, and export a ready-to-submit `submission.zip` package with 1 click.
+
+---
+
 ## 🏆 Benchmark Validation Results (Official PS1 Instance)
 
 All three scenario solutions are **100% feasible with zero hard rule violations**, mechanically verified by the competition's strict `validator.py`:

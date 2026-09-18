@@ -22,13 +22,14 @@
 ### 🎙️ Shot-by-Shot Script & Narration
 
 #### Scene 1: The Hook & Executive Control Room (0:00 - 0:25)
-- **Visual Setup:** Screen opens on `Page 1: Control Room` in sleek Executive Light Theme. Camera gently pans across the four KPI cards (`100% Feasible`, `0 Hard Breaches`, `14 Contracts Scheduled`, `Objective Score`).
+- **Visual Setup:** Screen opens on `Page 1: Control Room` in crisp Executive Day Mode (`#F8FAFC` slate canvas, pure white elevated cards, `#0F172A` deep navy typography). Camera gently pans across the four KPI cards (`100% Feasible`, `0 Hard Breaches`, `14 Contracts Scheduled`, `Objective Score`).
 - **On-Screen Action:**
-  1. Hover over the Scenario selector on the sidebar, switching from `Scenario A` to `Scenario B` and `Scenario C`.
-  2. The KPI cards and Contract Milestone Progress bars update instantaneously.
+  1. Point out the sidebar **Dataset & Instance** selector: reviewers can effortlessly toggle between the pre-computed official benchmark and uploading custom/hidden test instances (CSVs or ZIP).
+  2. Hover over the Scenario selector on the sidebar, switching from `Scenario A` to `Scenario B` and `Scenario C`.
+  3. The KPI cards, Delay Cost Breakdown, and Contract Milestone Progress bars update instantaneously.
 - **Narrator (Spoken):**
-  > *"Every night between 1 AM and 4:30 AM, Singapore's railway network undergoes critical renewals. Every night is contested: multiple contractors, 750V live-rail traction cuts, strict safety exclusion zones, and shared interchange tunnels.*  
-  > *Welcome to NebulaX RailWorks — an enterprise-grade decision support platform powered by Google OR-Tools CP-SAT, built specifically for LTA's Works Controllers to plan, prove, and dispatch track possessions with zero safety breaches."*
+  > *"Every night between 1 AM and 4:30 AM, Singapore's railway network undergoes critical renewals. Every night is contested: multiple capital contracts compete for track access, bringing 750V live-rail traction cutoffs, rolling safety exclusion zones, and shared interchange tunnels.*  
+  > *Welcome to NebulaX RailWorks — an enterprise-grade decision support platform powered by Google OR-Tools CP-SAT, built specifically for LTA's Works Controllers and Reviewers to plan, prove, and dispatch track possessions with zero safety breaches."*
 
 ---
 
@@ -83,20 +84,21 @@
 #### Scene 6: Reviewer Live Evaluation & Final Proof (2:25 - 3:00)
 - **Visual Setup:** Navigate to `Page 8: Validator & Downloads`. Open the **Reviewer / Judge Live Evaluation Panel**.
 - **On-Screen Action:**
-  1. Drag and drop a new hidden test dataset zip file into the uploader.
-  2. The system dynamically validates the files, displays instance metrics (Contracts, Activities, Locations).
+  1. Show the dedicated dropzone: judges can upload an undisclosed test dataset (as 8 individual CSVs or a single `.zip`).
+  2. Demonstrate automatic backfilling: even if reviewers provide only work demand files (`07` & `08`), our system auto-backfills network infrastructure files (`01` through `06`).
   3. Click **`🚀 Run Live Optimization & Validation`**.
-  4. The CP-SAT solver runs live on screen in ~1.0 second.
-  5. The Official Validator card turns green: `PASS (100% FEASIBLE) | Hard Violations: 0`.
-  6. Click **`📦 Download Official Submission ZIP`** to demonstrate instant compliance export.
+  4. The OR-Tools CP-SAT solver optimizes the schedule live on screen in **~1.1 seconds**.
+  5. The Official Validator card turns vibrant green: `PASS (100% FEASIBLE) | Hard Violations: 0`.
+  6. Click **`📦 Download Official Submission ZIP`** to demonstrate instant compliance artifact export.
 - **Narrator (Spoken):**
-  > *"Finally, we invite the judging panel to test our system live. On our Validator page, judges can upload any undisclosed benchmark instance — as raw CSVs or a zip. Our platform automatically ingests the topology, executes CP-SAT live in under 2 seconds, and runs the official mathematical validator.*  
+  > *"Finally, we invite the judging panel to test our system live. On our Validator page or via the sidebar, judges can upload any undisclosed benchmark instance — as raw CSVs or a zip. Our platform automatically ingests the topology, executes CP-SAT live in ~1 second, and runs the official mathematical validator.*  
   > *Zero hard violations. Zero dropped activities. Mathematically proven schedules ready for real-world dispatch. This is NebulaX RailWorks — elevating Singapore's railway operations to new heights."*
 
 ---
 
 ### 🎨 Visual & Production Guidelines
 - **Resolution:** 1080p (1920x1080) or 4K, 60 FPS.
-- **Theme:** Default to the crisp, executive light theme (`#FFFFFF` background, `#2563EB` Alpha sapphire blue, `#7C3AED` Beta violet, `#0F172A` deep typography).
+- **Theme:** Default to the crisp, executive Day Mode (`#F8FAFC` background, `#FFFFFF` elevated cards, `#2563EB` Alpha sapphire blue, `#7C3AED` Beta violet, `#0F172A` deep typography).
 - **Audio:** Crisp narration with clean microphone, subtle high-tech ambient background track at -22 dB (ducked to -28 dB during speech).
 - **Mouse Cursors:** Enable mouse click halos and smooth pointer movement. Highlight clickable elements with gentle zooms or callout boxes.
+

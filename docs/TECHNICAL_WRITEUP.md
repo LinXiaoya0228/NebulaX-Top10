@@ -35,7 +35,7 @@ To solve this challenge, we developed the **NebulaX RailWorks Platform**—an in
 - $\mathcal{L} = \{\text{ALP}, \text{BET}\}$: Rail lines.
 - $\mathcal{B} = \{\text{EB}, \text{WB}\}$: Running bounds.
 - $\mathcal{S}$: Stations, where $\mathcal{S}_{\text{ALP}} = \{S01, \dots, S08, H01, H02\}$ and $\mathcal{S}_{\text{BET}} = \{S11, \dots, S18, H01, H02\}$.
-- $\mathcal{K}$: Set of physical network sectors, comprising platform sectors $\text{PLAT}:l:s:b$ and tunnel track sectors $\text{SEC}:l:s_1\_s_2:b$.
+- $\mathcal{K}$: Set of physical network sectors, comprising platform sectors $\text{PLAT}:l:s:b$ and tunnel track sectors $\text{SEC}:l:(s_1, s_2):b$.
 - $\mathcal{W} = \{1, \dots, W\}$: Planning weeks horizon ($W = 20$).
 - $\mathcal{N} = \{1, \dots, 7\}$: Night indices within a calendar week.
 - $\mathcal{C}$: Set of contracted capital works programmes.
@@ -46,7 +46,7 @@ To solve this challenge, we developed the **NebulaX RailWorks Platform**—an in
    $$x_{a, w} \in \{0, 1\} \quad \forall a \in \mathcal{A}, w \in \mathcal{W}$$
    Indicates whether activity $a$ is granted track access in week $w$.
 2. **Access Night Local Accounting:**
-   $$\eta_{a, w} \in \{1, \dots, \text{max\_access}_{c(a)}\} \quad \text{if } x_{a, w} = 1$$
+   $$\eta_{a, w} \in \{1, \dots, \text{MaxAccess}_{c(a)}\} \quad \text{if } x_{a, w} = 1$$
    Designates which weekly access night index of contract $c(a)$ activity $a$ occupies.
 3. **Early Closure / Late Opening (ECLO):**
    $$e_{a, w} \in \{0, 1\} \quad \forall a \in \mathcal{A}, w \in \mathcal{W}$$
@@ -65,7 +65,7 @@ To solve this challenge, we developed the **NebulaX RailWorks Platform**—an in
 2. **Planned Start Horizon (Rule 2):**
    $$x_{a, w} = 0 \quad \forall w < es_a$$
 3. **Finish-to-Start Precedence (Rule 3):**
-   $$\text{end\_week}(pred(a)) < \text{start\_week}(a) \quad \forall a \text{ where } pred(a) \neq \emptyset$$
+   $$\text{EndWeek}(pred(a)) < \text{StartWeek}(a) \quad \forall a \text{ where } pred(a) \neq \emptyset$$
    A successor's first access night must strictly fall in a later calendar week than its predecessor's final access night ($\text{FS}+0$ lag across weeks).
 4. **Physical Closures & Moving Safety Buffers (Rule 4):**
    Let $\text{Closure}(a)$ be the spatial footprint of $a$ including its safety buffer:
@@ -83,10 +83,10 @@ To solve this challenge, we developed the **NebulaX RailWorks Platform**—an in
    Activities sharing the exact same $(k, w, \gamma)$ belong to the same possession; buffers between them are waived by rule.
 7. **Weekly Allocation Budget (Rule 7):**
    The count of distinct $\eta_{a, w}$ values used by contract $c$ in week $w$ cannot exceed its granted weekly entitlement:
-   $$|\{ \eta_{a, w} \mid c(a) = c \}| \le \text{number\_of\_maximum\_access\_per\_week}_c$$
+   $$|\{ \eta_{a, w} \mid c(a) = c \}| \le \text{MaxWeeklyQuota}_c$$
 8. **Nightly Workfront Capacity (Rule 8):**
    The number of concurrent activities of contract $c$ active on the same access night $\eta$ cannot exceed its team workfront limit:
-   $$\sum_{a \in \mathcal{A}_{c}} \mathbb{I}(\eta_{a, w} = n) \le \text{number\_of\_workfronts}_c \quad \forall w, \forall n$$
+   $$\sum_{a \in \mathcal{A}_{c}} \mathbb{I}(\eta_{a, w} = n) \le \text{WorkfrontCapacity}_c \quad \forall w, \forall n$$
 9. **ECLO Availability (Rule 9):**
    $e_{a, w} \in \{0, 1\}$. Permitted only where ECLO is policy-authorized.
 10. **ECLO Continuity Window (Rule 10 - Scenario C):**
@@ -118,11 +118,11 @@ This guarantees that **Contract Priority strictly sets the dominant band** (P1 f
 
 #### Policy Objectives
 1. **Scenario A (Strict Supply, Flexible Schedule):**
-   $$\min Z_A = \sum_{c \in \mathcal{C}} W_c \cdot (1 + \bar{\alpha}_c) \cdot \text{overrun\_days}_c$$
+   $$\min Z_A = \sum_{c \in \mathcal{C}} W_c \cdot (1 + \bar{\alpha}_c) \cdot \text{OverrunDays}_c$$
 2. **Scenario B (Strict Schedule, Flexible Supply):**
-   $$\min Z_B = 7 \cdot \text{excess\_access\_nights\_total} + 5 \cdot \text{eclo\_nights\_total}$$
+   $$\min Z_B = 7 \cdot \text{ExcessAccessNights}_{\text{total}} + 5 \cdot \text{ECLONights}_{\text{total}}$$
 3. **Scenario C (Balanced / Elastic Frontier):**
-   $$\min Z_C = \sum_{c \in \mathcal{C}} W_c \cdot (1 + \bar{\alpha}_c) \cdot \text{overrun\_days}_c + 7 \cdot \text{excess\_access\_nights\_total} + 5 \cdot \text{eclo\_nights\_total}$$
+   $$\min Z_C = \sum_{c \in \mathcal{C}} W_c \cdot (1 + \bar{\alpha}_c) \cdot \text{OverrunDays}_c + 7 \cdot \text{ExcessAccessNights}_{\text{total}} + 5 \cdot \text{ECLONights}_{\text{total}}$$
 
 ---
 
@@ -232,3 +232,4 @@ Designed for evaluating undisclosed instances:
 ## 6. Conclusion
 
 The NebulaX RailWorks Suite bridges the gap between theoretical mathematical optimization and daily railway operational reality. By combining exact CP-SAT solvers with domain-rich visualizations, digital twin sandboxing, and automated shift reporting, it empowers LTA and rail operators to maximize track maintenance productivity while guaranteeing physical safety and passenger service reliability.
+

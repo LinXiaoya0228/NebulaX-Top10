@@ -95,6 +95,38 @@ class Validator:
                     )
                 )
 
+        # Every scheduled access must have exactly the expanded physical occupancy.
+        expected_occupancy: Set[Tuple[str, int, str]] = set()
+        for act_id, weeks in activity_weeks.items():
+            act = self.instance.activities.get(act_id)
+            if act is None:
+                hard_violations.append(
+                    HardViolation(rule="schema", detail=f"Unknown activity in schedule: {act_id}")
+                )
+                continue
+            locations = self.graph.expand_activity_occupancy(
+                act.start_location_id, act.end_location_id
+            )
+            for week in weeks:
+                expected_occupancy.update((act_id, week, loc) for loc in locations)
+
+        actual_occupancy = {
+            (str(row["activity_id"]).strip(), int(row["week"]), str(row["location_id"]).strip())
+            for _, row in schedule_occupancy_df.iterrows()
+        }
+        missing_occupancy = expected_occupancy - actual_occupancy
+        extra_occupancy = actual_occupancy - expected_occupancy
+        if missing_occupancy or extra_occupancy:
+            hard_violations.append(
+                HardViolation(
+                    rule="occupancy",
+                    detail=(
+                        f"Occupancy does not match scheduled footprints: "
+                        f"{len(missing_occupancy)} missing, {len(extra_occupancy)} extra"
+                    ),
+                )
+            )
+
         # 2. Planned Start Date
         for act_id, weeks in activity_weeks.items():
             if act_id in self.instance.activities:
@@ -278,13 +310,44 @@ class Validator:
                             )
                         )
 
-        # 8. Scenario B Strict Schedule (Zero Overrun)
-        simulated_overruns: Dict[str, int] = {}
+        # 8. Recompute RESULTS from the access schedule; never trust submitted scores.
+        submitted_results: Dict[str, Tuple[str, int]] = {}
         for _, row in results_df.iterrows():
             c_num = str(row["contract_number"]).strip()
             sim_date_str = str(row["simulated_completion_date"]).strip()
             overrun = int(row["overrun_days"])
+            submitted_results[c_num] = (sim_date_str, overrun)
+
+        simulated_overruns: Dict[str, int] = {}
+        for c_num, contract in self.instance.contracts.items():
+            contract_weeks = [
+                week
+                for act in self.instance.activities_by_contract.get(c_num, [])
+                for week in activity_weeks.get(act.activity_id, [])
+            ]
+            if contract_weeks:
+                simulated_date = self.instance.week_end_date(max(contract_weeks))
+                planned_date = datetime.strptime(
+                    contract.planned_completion_date, "%Y-%m-%d"
+                ).date()
+                overrun = max(0, (simulated_date - planned_date).days)
+                simulated_date_str = simulated_date.isoformat()
+            else:
+                simulated_date_str = contract.planned_completion_date
+                overrun = 0
+
             simulated_overruns[c_num] = overrun
+            submitted = submitted_results.get(c_num)
+            if submitted != (simulated_date_str, overrun):
+                hard_violations.append(
+                    HardViolation(
+                        rule="results_mismatch",
+                        detail=(
+                            f"Contract {c_num} RESULTS mismatch: submitted {submitted}, "
+                            f"computed {(simulated_date_str, overrun)}"
+                        ),
+                    )
+                )
 
             if scenario == "B" and overrun > 0:
                 hard_violations.append(

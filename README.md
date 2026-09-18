@@ -1,7 +1,7 @@
 # NebulaX Hackathon — PS1: Railway Track Access Optimisation
 
 > **Team NebulaX-Top10** | Branch: `Siwen`  
-> An automated, mathematically optimal Track Access Allocation & Safety Buffer De-confliction System for dual-line rail networks (Line Alpha & Line Beta).
+> An automated CP-SAT Track Access Allocation system for dual-line rail networks (Line Alpha & Line Beta).
 
 ---
 
@@ -10,28 +10,28 @@
 Railway track access during engineering engineering hours (01:30 – 04:30) is the ultimate operational bottleneck. Track managers face a combinatorial challenge: scheduling heavy engineering works, rail renewals, and signaling upgrades across shared tracks while guaranteeing absolute spatial safety, respect for live-rail electrical boundaries, and contract milestone delivery.
 
 This solution provides:
-1. **Mathematical Optimization Engine**: Multi-scenario solver powered by Google OR-Tools CP-SAT and heuristic packing.
+1. **Mathematical Optimization Engine**: Self-contained multi-scenario solver powered by Google OR-Tools CP-SAT with optional warm-start hints.
 2. **Topological & Spatial Buffer Engine**: Models directional tracks, station platforms (`PLAT:...`), tunnel sectors (`SEC:...`), opposite-bound live rail mirrors, and cross-line interchange closures.
-3. **Independent Rule Validator**: 100% compliant with official competition rules (0 hard violations across Scenarios A, B, and C).
+3. **Independent Rule Validator**: Local specification validator with recomputed results and access-to-occupancy integrity checks.
 4. **2:00 AM Works Controller Decision Support Deck**: A high-contrast, interactive Streamlit web dashboard featuring interactive Gantt charts, digital twin spatial heatmaps, disruption "What-If" sandboxes, and one-click submission exports.
 
 ---
 
 ## 🏆 Benchmark Results
 
-All scenarios evaluated with the strict official rule validator on the public competition dataset:
+All scenarios evaluated with the repository's local specification validator on the public competition dataset:
 
 | Metric | Scenario A (Rigid Supply) | Scenario B (Strict Schedule) | Scenario C (Balanced Elasticity) |
 | :--- | :---: | :---: | :---: |
 | **Feasibility Status** | **✅ FEASIBLE (0 FAILS)** | **✅ FEASIBLE (0 FAILS)** | **✅ FEASIBLE (0 FAILS)** |
 | **Hard Violations Count** | **0** | **0** | **0** |
-| **Total Overrun Days** | 28 days (P3 only) | **0 days (100% on-time)** | 14 days (P3 only) |
-| **Contracts Overrunning** | 3 / 14 | **0 / 14** | 1 / 14 |
+| **Total Overrun Days** | 21 days (P3 only) | **0 days (100% on-time)** | 21 days (P3 only) |
+| **Contracts Overrunning** | 2 / 14 | **0 / 14** | 2 / 14 |
 | **Excess Access Nights** | 0 | 0 | 0 |
-| **ECLO Nights Used** | 0 (Forbidden) | 10 | 2 (Continuous 2-wk window) |
+| **ECLO Nights Used** | 0 (Forbidden) | 6 | 0 |
 | **Priority 1 Overruns** | **0 days** | **0 days** | **0 days** |
 | **Priority 2 Overruns** | **0 days** | **0 days** | **0 days** |
-| **Objective Score** | **34.3** | **50.0** | **28.2** |
+| **Objective Score** | **27.3** | **30.0** | **27.3** |
 
 ---
 
@@ -86,15 +86,15 @@ NebulaX-Top10/
 │   ├── graph.py                      # Rail topology & sector/platform expansion
 │   ├── rules.py                      # Buffer calculations & conflict engine
 │   ├── solver.py                     # Multi-scenario CP-SAT optimizer
-│   ├── validator.py                  # Official specification validator
+│   ├── validator.py                  # Local specification validator
 │   └── exporter.py                   # Submission CSV generator
 ├── web/
 │   ├── __init__.py
 │   └── app.py                        # Streamlit Works Controller Dashboard
 ├── results/
-│   ├── scenario_A/                   # Official outputs for Scenario A
-│   ├── scenario_B/                   # Official outputs for Scenario B
-│   └── scenario_C/                   # Official outputs for Scenario C
+│   ├── scenario_A/                   # Generated outputs for Scenario A
+│   ├── scenario_B/                   # Generated outputs for Scenario B
+│   └── scenario_C/                   # Generated outputs for Scenario C
 ├── tests/
 │   ├── __init__.py
 │   └── test_validator.py             # Automated pytest verification suite
@@ -114,10 +114,14 @@ pip install -r requirements.txt
 ```
 
 ### 2. Run Automated Test Suite
-Verify that all 3 scenarios satisfy 100% of official rules with 0 violations:
+Verify that all 3 scenarios pass the repository's local specification checks:
 ```bash
 pytest tests/test_validator.py -v
 ```
+
+The organizer's executable validator is not included in the public problem repository.
+Run the generated submissions through that validator before final submission, especially
+to confirm the exact buffer/closure interpretation across location-week possession slots.
 
 ### 3. Launch the Interactive Web Application
 Start the Works Controller Dashboard:

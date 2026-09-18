@@ -1,6 +1,7 @@
 import io
 import os
 import sys
+import tempfile
 import zipfile
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -96,6 +97,19 @@ def load_solution_for_scenario(instance: ProblemInstance, scenario: str) -> Sche
     return solver.solve(scenario)
 
 
+@st.cache_data(show_spinner=False)
+def solve_uploaded_instance(
+    uploaded_payload: tuple[tuple[str, bytes], ...], scenario: str
+) -> tuple[ProblemInstance, ScheduleSolution]:
+    with tempfile.TemporaryDirectory() as temp_dir:
+        data_dir = Path(temp_dir)
+        for file_name, contents in uploaded_payload:
+            (data_dir / file_name).write_bytes(contents)
+        uploaded_instance = load_problem_instance(data_dir)
+    solution = TrackAccessSolver(uploaded_instance).solve(scenario, time_limit_sec=60)
+    return uploaded_instance, solution
+
+
 # Sidebar controls
 st.sidebar.image(
     "https://img.icons8.com/fluency/96/subway.png",
@@ -118,6 +132,22 @@ scenario = st.sidebar.radio(
     index=0,
 )
 
+required_instance_files = {
+    "01_LINES.csv",
+    "02_STATIONS.csv",
+    "03_SECTORS.csv",
+    "04_LOCATION_SUPPLY.csv",
+    "05_BUFFER_LOCATION.csv",
+    "06_PARAMETERS.csv",
+    "07_PROJECT_DETAILS.csv",
+    "08_ACTIVITY_DETAILS.csv",
+}
+uploaded_files = st.sidebar.file_uploader(
+    "Upload hidden instance (8 CSV files)",
+    type="csv",
+    accept_multiple_files=True,
+)
+
 st.sidebar.divider()
 st.sidebar.markdown("### Quick Navigation")
 st.sidebar.markdown("- 📊 **Executive Scorecard**")
@@ -125,23 +155,37 @@ st.sidebar.markdown("- 📅 **Interactive Gantt Timeline**")
 st.sidebar.markdown("- 🗺️ **Spatial Topology & Buffer Map**")
 st.sidebar.markdown("- 🔍 **Validator & Rule Compliance**")
 st.sidebar.markdown("- ⚡ **What-If Disruption Sandbox**")
-st.sidebar.markdown("- 💾 **Export Official Submissions**")
+st.sidebar.markdown("- 💾 **Export Submission CSVs**")
 
 
 # Main App Header
 st.title("🚆 Works Controller Decision Support System")
 st.markdown(
-    f"**Real-Time Railway Track Access Scheduling & Safety Buffer De-confliction Engine** | Active: **Scenario {scenario}**"
+    f"**Real-Time Railway Track Access Scheduling Engine** | Active: **Scenario {scenario}**"
 )
 
-# Load data instance
-instance = get_default_instance()
+# Load the public instance or solve an uploaded hidden instance.
+if uploaded_files:
+    uploaded_names = {file.name for file in uploaded_files}
+    missing_files = sorted(required_instance_files - uploaded_names)
+    unexpected_files = sorted(uploaded_names - required_instance_files)
+    if missing_files or unexpected_files:
+        st.error(
+            f"Instance file set is invalid. Missing: {missing_files or 'none'}; "
+            f"unexpected: {unexpected_files or 'none'}."
+        )
+        st.stop()
+    payload = tuple(sorted((file.name, file.getvalue()) for file in uploaded_files))
+    with st.spinner(f"Optimizing uploaded instance for Scenario {scenario}..."):
+        instance, solution = solve_uploaded_instance(payload, scenario)
+else:
+    instance = get_default_instance()
+    solution = load_solution_for_scenario(instance, scenario)
+
 graph = RailNetworkGraph(instance)
 rules = RuleEngine(instance, graph)
 validator = Validator(instance)
 
-# Load current schedule solution
-solution = load_solution_for_scenario(instance, scenario)
 access_df = pd.DataFrame(solution.access_records)
 occ_df = pd.DataFrame(solution.occupancy_records)
 results_df = pd.DataFrame(solution.results_records)
@@ -189,7 +233,7 @@ st.write("")
 tab_gantt, tab_map, tab_validator, tab_whatif, tab_export = st.tabs([
     "📅 Master Gantt Timeline",
     "🗺️ Network Digital Twin & Buffer Map",
-    "🛡️ Official Rule Compliance & Scoring",
+    "🛡️ Specification Checks & Scoring",
     "⚡ What-If Disruption Sandbox",
     "💾 Submission & Data Export",
 ])
@@ -346,10 +390,10 @@ with tab_map:
 
 
 # -------------------------------------------------------------
-# TAB 3: OFFICIAL RULE COMPLIANCE & SCORING
+# TAB 3: LOCAL SPECIFICATION CHECKS & SCORING
 # -------------------------------------------------------------
 with tab_validator:
-    st.subheader("Official Rules Verification Engine")
+    st.subheader("Local Specification Verification")
     st.markdown("Verifies all 10 strict physical, topological, and operational constraints:")
 
     col_chk1, col_chk2 = st.columns(2)
@@ -366,7 +410,7 @@ with tab_validator:
         st.markdown(f"- **Scenario Strict Target**: {'✅ PASSED' if not any(v.rule == 'planned_date' for v in report.hard_violations) else '❌ FAILED'}")
 
     st.divider()
-    st.markdown("### Official JSON Grading Report")
+    st.markdown("### Local JSON Validation Report")
     st.json(report.to_dict())
 
 

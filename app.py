@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import io
 import os
+import shutil
+import tempfile
 import zipfile
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -18,6 +20,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from data_parser import DataMall
+from scheduler import ScenarioScheduler
 from explainer import DeterministicExplainer, HandoverBriefingGenerator
 from operations_sandbox import (
     AdHocMaintenanceActivity,
@@ -71,6 +74,59 @@ def get_default_data_dir() -> str:
     return "PS1/01_data"
 
 
+def get_active_data_dir() -> str:
+    if "custom_data_dir" in st.session_state and st.session_state.custom_data_dir:
+        if os.path.isdir(st.session_state.custom_data_dir):
+            return st.session_state.custom_data_dir
+    return get_default_data_dir()
+
+
+def process_uploaded_dataset(uploaded_files: list) -> Optional[str]:
+    """Saves uploaded zip or CSV files into a persistent session temp directory, filling missing files from default dataset."""
+    if not uploaded_files:
+        return None
+
+    target_dir = tempfile.mkdtemp(prefix="nebulax_upload_")
+
+    for f in uploaded_files:
+        if f.name.endswith(".zip"):
+            z_buf = io.BytesIO(f.read())
+            with zipfile.ZipFile(z_buf, "r") as z:
+                z.extractall(target_dir)
+        elif f.name.endswith(".csv"):
+            with open(os.path.join(target_dir, f.name), "wb") as out_f:
+                out_f.write(f.read())
+
+    found_dir = target_dir
+    for root, dirs, files in os.walk(target_dir):
+        if any(f.endswith(".csv") for f in files):
+            found_dir = root
+            break
+
+    # Bulletproof fallback: copy any missing official benchmark CSVs from default data dir
+    default_dir = get_default_data_dir()
+    for fname in os.listdir(default_dir):
+        if fname.endswith(".csv") and not os.path.exists(os.path.join(found_dir, fname)):
+            shutil.copy2(os.path.join(default_dir, fname), os.path.join(found_dir, fname))
+
+    return found_dir
+
+
+def run_optimization_action(target_scenario: str, data_dir: str, timeout: int = 30) -> Dict[str, Any]:
+    """Triggers the CP-SAT optimization engine and updates session state with validated reports."""
+    scheduler = ScenarioScheduler(data_dir)
+    scenarios_to_run = ["A", "B", "C"] if target_scenario == "ALL" else [target_scenario]
+    results = {}
+    for sc in scenarios_to_run:
+        out_dir = os.path.join(results_base, f"scenario_{sc}")
+        os.makedirs(out_dir, exist_ok=True)
+        report = scheduler.solve(scenario=sc, output_dir=out_dir, timeout_seconds=timeout, verbose=False)
+        st.session_state.reports[sc] = report
+        st.session_state.results_dirs[sc] = out_dir
+        results[sc] = report
+    return results
+
+
 def create_submission_zip(output_dir: str, scenario_name: str) -> bytes:
     """Zips the 3 output files for official download."""
     buf = io.BytesIO()
@@ -92,9 +148,11 @@ if "sandbox" not in st.session_state:
     st.session_state.sandbox = None
 if "active_scenario" not in st.session_state:
     st.session_state.active_scenario = "A"
+if "custom_data_dir" not in st.session_state:
+    st.session_state.custom_data_dir = None
 
 results_base = os.path.join(os.path.dirname(__file__), "results")
-active_data_dir = get_default_data_dir()
+active_data_dir = get_active_data_dir()
 
 # Cache DataMall loader
 @st.cache_resource
@@ -162,6 +220,38 @@ with st.sidebar:
             """,
             unsafe_allow_html=True,
         )
+
+    with st.expander("⚡ Live Engine & Uploads", expanded=False):
+        st.markdown("<b style='color: #E2E8F0; font-size: 0.85rem;'>Custom Dataset Upload</b>", unsafe_allow_html=True)
+        sb_upload = st.file_uploader(
+            "Upload Dataset (.zip or CSVs)",
+            type=["zip", "csv"],
+            accept_multiple_files=True,
+            key="sb_dataset_upload",
+            help="Upload dataset ZIP archive or individual CSV tables.",
+        )
+        if sb_upload:
+            new_dir = process_uploaded_dataset(sb_upload)
+            if new_dir:
+                st.session_state.custom_data_dir = new_dir
+                st.cache_resource.clear()
+                st.success("✓ Dataset loaded!")
+
+        if st.session_state.custom_data_dir:
+            st.caption(f"📁 Active: `{os.path.basename(st.session_state.custom_data_dir)}`")
+            if st.button("Reset to Default Dataset", width="stretch", key="sb_reset_ds"):
+                st.session_state.custom_data_dir = None
+                st.cache_resource.clear()
+                st.rerun()
+
+        st.markdown("<b style='color: #E2E8F0; font-size: 0.85rem;'>Live Optimization Trigger</b>", unsafe_allow_html=True)
+        sb_sc = st.selectbox("Scenario to Solve", ["A", "B", "C", "ALL"], key="sb_solve_sc")
+        sb_timeout = st.slider("Timeout (seconds)", min_value=5, max_value=60, value=30, step=5, key="sb_timeout")
+        if st.button("🚀 Run Live Optimization", type="primary", width="stretch", key="sb_run_btn"):
+            with st.spinner(f"Solving Scenario {sb_sc} with CP-SAT..."):
+                run_optimization_action(sb_sc, get_active_data_dir(), timeout=sb_timeout)
+                st.success(f"✓ Scenario {sb_sc} solved!")
+                st.rerun()
 
     st.markdown("---")
     st.markdown(
@@ -862,6 +952,46 @@ def page_validator_downloads():
             if os.path.exists(p):
                 with open(p, "rb") as f:
                     st.download_button("📄 RESULTS.csv", f, "RESULTS.csv", "text/csv", width="stretch")
+
+        st.markdown("---")
+        st.markdown("### ⚡ Live Optimization & Custom Dataset Engine")
+        st.caption("Upload hidden test datasets or modified operational instances, trigger the CP-SAT engine live, and evaluate schedule feasibility.")
+
+        upload_col, run_col = st.columns([1, 1], gap="medium")
+        with upload_col:
+            st.markdown("##### 📁 Custom Dataset Upload")
+            page_uploaded_files = st.file_uploader(
+                "Upload Dataset Archive (.zip) or CSV tables",
+                type=["zip", "csv"],
+                accept_multiple_files=True,
+                key="page_validator_uploader",
+                help="Upload a zip file containing the 8 PS1 CSV tables, or select multiple CSV tables directly.",
+            )
+            if page_uploaded_files:
+                new_dir = process_uploaded_dataset(page_uploaded_files)
+                if new_dir:
+                    st.session_state.custom_data_dir = new_dir
+                    st.cache_resource.clear()
+                    st.success(f"✓ Successfully loaded dataset from {len(page_uploaded_files)} file(s)")
+
+            if st.session_state.get("custom_data_dir"):
+                st.info(f"Active Custom Directory: `{os.path.basename(st.session_state.custom_data_dir)}`")
+                if st.button("Reset to Default Benchmark Dataset", width="stretch", key="page_val_reset_ds"):
+                    st.session_state.custom_data_dir = None
+                    st.cache_resource.clear()
+                    st.rerun()
+
+        with run_col:
+            st.markdown("##### 🚀 Trigger Solver")
+            val_solve_sc = st.selectbox("Select Scenario to Optimize", ["A", "B", "C", "ALL"], index=0, key="page_val_solve_sc")
+            val_timeout = st.slider("Solver Time Limit (seconds)", min_value=5, max_value=60, value=30, step=5, key="page_val_timeout")
+
+            if st.button("⚡ Run Live Optimization", type="primary", width="stretch", key="page_val_run_btn"):
+                with st.spinner(f"Running OR-Tools CP-SAT Solver for Scenario {val_solve_sc}..."):
+                    current_data_dir = get_active_data_dir()
+                    run_results = run_optimization_action(val_solve_sc, current_data_dir, timeout=val_timeout)
+                    st.success(f"✓ Optimization completed for Scenario {val_solve_sc}!")
+                    st.rerun()
 
 
 # ------------------------------------------------------------------------------

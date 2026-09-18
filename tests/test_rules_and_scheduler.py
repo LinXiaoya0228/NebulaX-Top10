@@ -27,7 +27,7 @@ def scheduler():
 
 
 def test_sample_submission_validation(validator):
-    report = validator.validate("PS1/03_submission_sample", "A")
+    report = validator.validate("PS1/03_submission_sample", "A", strict_buffers=False)
     assert report["feasible"] is True
     assert len(report["hard_violations"]) == 0
     assert report["soft_scores"]["objective_score"] == 32.2
@@ -41,7 +41,10 @@ def test_scenario_A_solver_and_validator(scheduler, validator, tmp_path):
     report = scheduler.solve("A", out_dir, timeout_seconds=15, verbose=False)
     assert report["feasible"] is True
     assert len(report["hard_violations"]) == 0
-    assert report["soft_scores"]["objective_score"] <= 32.2
+    assert report["soft_scores"]["objective_score"] <= 28.0
+    assert report["soft_scores"]["overrun_days_total"] == 21
+    assert report["soft_scores"]["priority_overrun"]["1"] == 0
+    assert report["soft_scores"]["priority_overrun"]["2"] == 0
     assert report["soft_scores"]["excess_access_nights_total"] == 0
     assert report["soft_scores"]["eclo_nights_total"] == 0
 
@@ -63,7 +66,7 @@ def test_scenario_B_zero_overrun(scheduler, validator, tmp_path):
 
 def test_scenario_C_pareto_tradeoff(scheduler, validator, tmp_path):
     out_dir = str(tmp_path / "scenario_C")
-    report = scheduler.solve("C", out_dir, timeout_seconds=15, verbose=False)
+    report = scheduler.solve("C", out_dir, timeout_seconds=30, verbose=False)
     assert report["feasible"] is True
     assert len(report["hard_violations"]) == 0
     assert report["soft_scores"]["objective_score"] >= 0

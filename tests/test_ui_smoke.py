@@ -16,7 +16,13 @@ from ui.charts import (
     build_contract_gantt_chart,
     build_topology_schematic,
 )
-from app import create_submission_zip, get_default_data_dir
+from app import (
+    create_submission_zip,
+    get_default_data_dir,
+    get_active_data_dir,
+    process_uploaded_dataset,
+    run_optimization_action,
+)
 
 
 @pytest.fixture(scope="module")
@@ -124,4 +130,24 @@ def test_topology_schematic(dm):
 def test_submission_zip_creation():
     zip_bytes = create_submission_zip("results/scenario_A", "A")
     assert len(zip_bytes) > 0
+
+
+def test_dataset_upload_and_optimization_trigger():
+    class MockUploadedFile:
+        def __init__(self, name: str, content: bytes):
+            self.name = name
+            self.content = content
+
+        def read(self):
+            return self.content
+
+    mock_csv = MockUploadedFile("07_activity.csv", b"activity_id,contract_number\n")
+    loaded_dir = process_uploaded_dataset([mock_csv])
+    assert os.path.isdir(loaded_dir)
+    assert os.path.exists(os.path.join(loaded_dir, "07_activity.csv"))
+    assert os.path.exists(os.path.join(loaded_dir, "01_LINES.csv"))
+
+    res = run_optimization_action("A", "PS1/01_data", timeout=10)
+    assert "A" in res
+    assert res["A"]["feasible"] is True
 

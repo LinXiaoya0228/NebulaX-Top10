@@ -53,6 +53,33 @@ def test_path_expansion_westbound(dm):
     assert locs == expected
 
 
+def test_path_expansion_platform_endpoints(dm):
+    # Single platform activity
+    locs1, tunnels1, plats1, line1, bound1, min1, max1 = dm.expand_route(
+        "PLAT:ALP:S01:EB", "PLAT:ALP:S01:EB"
+    )
+    assert locs1 == {"PLAT:ALP:S01:EB"}
+    assert tunnels1 == []
+    assert plats1 == ["PLAT:ALP:S01:EB"]
+
+    # Platform to Platform span
+    locs2, tunnels2, plats2, line2, bound2, min2, max2 = dm.expand_route(
+        "PLAT:ALP:S01:EB", "PLAT:ALP:S03:EB"
+    )
+    assert "PLAT:ALP:S01:EB" in locs2
+    assert "PLAT:ALP:S02:EB" in locs2
+    assert "PLAT:ALP:S03:EB" in locs2
+    assert "SEC:ALP:S01_S02:EB" in locs2
+    assert "SEC:ALP:S02_S03:EB" in locs2
+    assert len(locs2) == 5
+
+    # Mixed Platform to Sector span
+    locs3, tunnels3, plats3, line3, bound3, min3, max3 = dm.expand_route(
+        "PLAT:ALP:S01:EB", "SEC:ALP:S02_S03:EB"
+    )
+    assert locs3 == locs2
+
+
 def test_predecessor_cycle_detection(dm):
     topo_order = dm.detect_predecessor_cycles()
     assert len(topo_order) == len(dm.activities)

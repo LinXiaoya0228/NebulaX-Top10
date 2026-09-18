@@ -25,8 +25,7 @@ class Validator:
     def validate(self, submission_dir: str, scenario: str, strict_buffers: Optional[bool] = None) -> Dict[str, Any]:
         """Validates a submission directory against the given scenario."""
         if strict_buffers is None:
-            # The official sample submission is an un-staggered reference format against nominal rules
-            strict_buffers = "03_submission_sample" not in submission_dir
+            strict_buffers = True
 
         hard_violations: List[Dict[str, str]] = []
         soft_scores: Dict[str, Any] = {}
@@ -360,7 +359,17 @@ class Validator:
                     })
 
         # 2. Live mirroring and Live cross-line interchange closure
-        for wk, g in occ_df.groupby("week"):
+        # Night-level physical reality: Live third-rail power cut and interchange closure
+        # occur on the specific night the Live activity takes track access.
+        if "access_night" in access_df.columns:
+            occ_night = occ_df.merge(access_df[["activity_id", "week", "access_night"]].drop_duplicates(), on=["activity_id", "week"], how="left")
+            group_keys = ["week", "access_night"]
+        else:
+            occ_night = occ_df.copy()
+            occ_night["access_night"] = 1
+            group_keys = ["week", "access_night"]
+
+        for (wk, an), g in occ_night.groupby(group_keys):
             aids = g["activity_id"].unique()
             for aid in aids:
                 if aid not in self.dm.activities:
@@ -375,7 +384,7 @@ class Validator:
                         violations.append({
                             "rule": "closure",
                             "severity": "hard",
-                            "detail": f"wk{wk}: {list(violators)} inside Live mirror closure of {aid} at {list(mirror_hits)[:3]}",
+                            "detail": f"Wk {wk} Night {an}: {list(violators)} inside Live mirror closure of {aid} at {list(mirror_hits)[:3]}",
                         })
                     # Check cross-line intrusion
                     cross_hits = set(other_occ["location_id"]) & footprint["cross_line_locations"]
@@ -384,31 +393,18 @@ class Validator:
                         violations.append({
                             "rule": "closure",
                             "severity": "hard",
-                            "detail": f"wk{wk}: {list(violators)} inside Live interchange closure of {aid} at {list(cross_hits)[:3]}",
+                            "detail": f"Wk {wk} Night {an}: {list(violators)} inside Live interchange closure of {aid} at {list(cross_hits)[:3]}",
                         })
 
         if strict_buffers:
-            # 3. Night-level closures, buffer intrusion, and buffer overlaps (Rule 4 & Rule 6)
-            # Checked within each local accounting scope: (contract_number, access_type, week, access_night).
-            # Different contracts have independent access_night counters; possession grouping across contracts
-            # is governed by (location_id, week, co_share_group).
+            # 3. Night-level closures, buffer intrusion, and buffer overlaps across all contracts (Rule 4 & Rule 6)
             occ_map: Dict[Tuple[str, int], Dict[str, str]] = defaultdict(dict)
             for _, row in occ_df.iterrows():
                 occ_map[(row["activity_id"], int(row["week"]))][row["location_id"]] = row["co_share_group"]
 
             access_meta = access_df.copy()
-            access_meta["contract_number"] = access_meta["activity_id"].map(
-                lambda aid: self.dm.activities[aid].contract_number if aid in self.dm.activities else None
-            )
-            access_meta["access_type"] = access_meta["activity_id"].map(
-                lambda aid: self.dm.contracts[self.dm.activities[aid].contract_number].access_type
-                if aid in self.dm.activities and self.dm.activities[aid].contract_number in self.dm.contracts
-                else None
-            )
-
-            for (cid, atype, wk, an), g in access_meta.groupby(
-                ["contract_number", "access_type", "week", "access_night"]
-            ):
+            # Extended across all contracts for the same (week, access_night)
+            for (wk, an), g in access_meta.groupby(["week", "access_night"]):
                 aids = [a for a in g["activity_id"].unique() if a in self.dm.activities]
                 if len(aids) <= 1:
                     continue
@@ -428,14 +424,14 @@ class Validator:
                             violations.append({
                                 "rule": "closure",
                                 "severity": "hard",
-                                "detail": f"Contract {cid} Wk {wk} Night {an}: Activity {a1} works inside buffer of {a2} at {sorted(list(hit1))[:3]}",
+                                "detail": f"Wk {wk} Night {an}: Activity {a1} works inside buffer of {a2} at {sorted(list(hit1))[:3]}",
                             })
                         hit2 = (w2 - cs_locs) & b1
                         if hit2:
                             violations.append({
                                 "rule": "closure",
                                 "severity": "hard",
-                                "detail": f"Contract {cid} Wk {wk} Night {an}: Activity {a2} works inside buffer of {a1} at {sorted(list(hit2))[:3]}",
+                                "detail": f"Wk {wk} Night {an}: Activity {a2} works inside buffer of {a1} at {sorted(list(hit2))[:3]}",
                             })
 
                         buf_overlap = b1 & b2
@@ -443,7 +439,7 @@ class Validator:
                             violations.append({
                                 "rule": "closure",
                                 "severity": "hard",
-                                "detail": f"Contract {cid} Wk {wk} Night {an}: Safety buffers of {a1} and {a2} overlap at {sorted(list(buf_overlap))[:3]}",
+                                "detail": f"Wk {wk} Night {an}: Safety buffers of {a1} and {a2} overlap at {sorted(list(buf_overlap))[:3]}",
                             })
 
     def _check_capacity(

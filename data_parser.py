@@ -264,15 +264,39 @@ class DataMall:
         )
         return self.expand_route(dummy_act.start_location_id, dummy_act.end_location_id)[0]
 
+    def _parse_endpoint_stations(self, line: str, loc_str: str) -> Tuple[int, int]:
+        """Returns (min_stn_idx, max_stn_idx) in station_order[line] for a location endpoint."""
+        parts = loc_str.split(":")
+        kind = parts[0]
+        stn_list = self.station_order[line]
+        if kind == "PLAT":
+            stn_id = parts[2]
+            idx = stn_list.index(stn_id)
+            return idx, idx
+        elif kind == "SEC":
+            pair = parts[2]
+            if "_" in pair:
+                from_stn, to_stn = pair.split("_")
+                idx1 = stn_list.index(from_stn)
+                idx2 = stn_list.index(to_stn)
+                return min(idx1, idx2), max(idx1, idx2)
+            else:
+                idx = stn_list.index(pair)
+                return idx, idx
+        else:
+            raise ValueError(f"Unknown location kind in endpoint: {loc_str}")
+
     def expand_route(self, start_loc: str, end_loc: str) -> Tuple[Set[str], List[str], List[str], str, str, int, int]:
         """
         Expands start_loc and end_loc to all tunnel sectors and platform sectors.
-        Input format: SEC:<line>:<from>_<to>:<bound>
+        Input formats supported:
+          - SEC:<line>:<from>_<to>:<bound>
+          - PLAT:<line>:<station_id>:<bound>
         """
         s_parts = start_loc.split(":")
         e_parts = end_loc.split(":")
-        s_line, s_pair, s_bound = s_parts[1], s_parts[2], s_parts[3]
-        e_line, e_pair, e_bound = e_parts[1], e_parts[2], e_parts[3]
+        s_line, s_bound = s_parts[1], s_parts[-1]
+        e_line, e_bound = e_parts[1], e_parts[-1]
 
         if s_line != e_line or s_bound != e_bound:
             raise ValueError(f"Route crosses lines or bounds directly: {start_loc} -> {end_loc}")
@@ -280,26 +304,35 @@ class DataMall:
         line = s_line
         bound = s_bound
         line_secs = self.sectors[line]
-
-        s_idx = next(i for i, sec in enumerate(line_secs) if sec.sector_id == f"SEC:{line}:{s_pair}")
-        e_idx = next(i for i, sec in enumerate(line_secs) if sec.sector_id == f"SEC:{line}:{e_pair}")
-
-        idx_min, idx_max = min(s_idx, e_idx), max(s_idx, e_idx)
-        min_seq = line_secs[idx_min].seq
-        max_seq = line_secs[idx_max].seq
-
-        touched_secs = [f"{line_secs[i].sector_id}:{bound}" for i in range(idx_min, idx_max + 1)]
-
-        # Stations touched
         stn_list = self.station_order[line]
-        stn_start_name = line_secs[idx_min].from_station_id
-        stn_end_name = line_secs[idx_max].to_station_id
 
-        s_stn_idx = stn_list.index(stn_start_name)
-        e_stn_idx = stn_list.index(stn_end_name)
-        stn_min, stn_max = min(s_stn_idx, e_stn_idx), max(s_stn_idx, e_stn_idx)
+        s_min_stn, s_max_stn = self._parse_endpoint_stations(line, start_loc)
+        e_min_stn, e_max_stn = self._parse_endpoint_stations(line, end_loc)
 
-        touched_plats = [f"PLAT:{line}:{stn_list[k]}:{bound}" for k in range(stn_min, stn_max + 1)]
+        overall_stn_min = min(s_min_stn, e_min_stn)
+        overall_stn_max = max(s_max_stn, e_max_stn)
+
+        # Platform sectors touched
+        touched_plats = [f"PLAT:{line}:{stn_list[k]}:{bound}" for k in range(overall_stn_min, overall_stn_max + 1)]
+
+        # Tunnel sectors touched
+        touched_secs = []
+        sec_seqs = []
+        for k in range(overall_stn_min, overall_stn_max):
+            from_s = stn_list[k]
+            to_s = stn_list[k + 1]
+            # Match sector
+            sec_match = next(
+                (sec for sec in line_secs if (sec.from_station_id == from_s and sec.to_station_id == to_s)
+                 or (sec.from_station_id == to_s and sec.to_station_id == from_s)),
+                None
+            )
+            if sec_match:
+                touched_secs.append(f"{sec_match.sector_id}:{bound}")
+                sec_seqs.append(sec_match.seq)
+
+        min_seq = min(sec_seqs) if sec_seqs else 0
+        max_seq = max(sec_seqs) if sec_seqs else 0
 
         all_locations = set(touched_secs + touched_plats)
         return all_locations, touched_secs, touched_plats, line, bound, min_seq, max_seq
@@ -370,6 +403,23 @@ class DataMall:
                 idx = max_i + b
                 if 0 <= idx < len(line_secs):
                     buffer_locations.add(f"{line_secs[idx].sector_id}:{bound}")
+        elif not s_indices and act.platform_sectors and buf_sectors_count > 0:
+            stn_list = self.station_order[line]
+            touched_stn_indices = [
+                stn_list.index(loc.split(":")[2])
+                for loc in act.platform_sectors if loc.split(":")[2] in stn_list
+            ]
+            if touched_stn_indices:
+                min_s = min(touched_stn_indices)
+                max_s = max(touched_stn_indices)
+                for b in range(1, buf_sectors_count + 1):
+                    idx = min_s - b
+                    if 0 <= idx < len(line_secs):
+                        buffer_locations.add(f"{line_secs[idx].sector_id}:{bound}")
+                for b in range(buf_sectors_count):
+                    idx = max_s + b
+                    if 0 <= idx < len(line_secs):
+                        buffer_locations.add(f"{line_secs[idx].sector_id}:{bound}")
 
         # 2. Opposite bound mirroring (only for Live)
         if opp_mirror:

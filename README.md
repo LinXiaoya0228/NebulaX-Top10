@@ -4,7 +4,7 @@
 [![OR-Tools CP-SAT](https://img.shields.io/badge/Solver-OR--Tools%20CP--SAT%20v9.15-34D399.svg?logo=google&logoColor=white)](https://developers.google.com/optimization)
 [![Streamlit App](https://img.shields.io/badge/Interface-Streamlit%201.64+-FF4B4B.svg?logo=streamlit&logoColor=white)](https://streamlit.io/)
 [![Safety Compliance](https://img.shields.io/badge/Safety%20Validator-100%25%20PASS%20(0%20Violations)-10B981.svg)](validator.py)
-[![Optimal Score](https://img.shields.io/badge/Scenario%20C%20Score-26.1%20(Verified)-F59E0B.svg)](results/scenario_C/)
+[![Optimal Score](https://img.shields.io/badge/Scenario%20A%20Score-25.2%20(0%20P1%2FP2%20Overrun)-F59E0B.svg)](results/scenario_A/)
 [![WCAG 2.2 AA](https://img.shields.io/badge/Accessibility-WCAG%202.2%20AA%20Compliant-818CF8.svg)](ui/theme.py)
 
 > **LTA NebulaX Hackathon 2026 — Problem Statement 1 (PS1: Railway Track Access Optimisation)**  
@@ -45,16 +45,16 @@ The network features complex physical constraints, including shared tunnel secto
 
 All three official scenarios have been solved, validated, and verified against the official validator:
 
-| Operational Scenario | Strategic Optimization Objective | Official Penalty Score | Hard Rule Violations | Max Overrun | ECLO Extended Nights | Solver Run Time | Safety Status |
-| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Scenario A** | Strict Overrun Minimisation (P1 priority) | **32.2** | **0** | 14 days | 0 nights | 0.54s | `100% PASSED` |
-| **Scenario B** | Zero Overrun Guarantee (All milestones met) | **30.0** | **0** | **0 days** | 4 nights | 0.65s | `100% PASSED` |
-| **Scenario C** | Pareto Flexibility Balance (Cost minimised) | **26.1** | **0** | **0 days** | 0 nights | 0.94s | `100% PASSED` |
+| Operational Scenario | Strategic Optimization Objective | Official Penalty Score | Hard Rule Violations | Total Overrun | P1/P2 Overrun | ECLO Extended Nights | Solver Run Time | Safety Status |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Scenario A** | Strict Overrun Minimisation (0 Overrun on P1/P2) | **25.2** | **0** | **21 days** | **0 days** | 0 nights | 0.59s | `100% PASSED` |
+| **Scenario B** | Zero Overrun Guarantee (All milestones met) | **30.0** | **0** | **0 days** | **0 days** | 6 nights | 0.74s | `100% PASSED` |
+| **Scenario C** | Pareto Flexibility Balance (Continuous ECLO) | **29.1** | **0** | **7 days** | **0 days** | 4 nights | 1.29s | `100% PASSED` |
 
 ```
-✓ SCENARIO A: 192 accesses scheduled | 0 hard violations | Score: 32.2
-✓ SCENARIO B: 192 accesses scheduled | 0 hard violations | Score: 30.0
-✓ SCENARIO C: 192 accesses scheduled | 0 hard violations | Score: 26.1
+✓ SCENARIO A: 192 accesses scheduled | 0 hard violations | Score: 25.2 | P1/P2 Overrun: 0 days
+✓ SCENARIO B: 192 accesses scheduled | 0 hard violations | Score: 30.0 | Total Overrun: 0 days
+✓ SCENARIO C: 192 accesses scheduled | 0 hard violations | Score: 29.1 | ECLO Nights: 4
 ```
 
 ---

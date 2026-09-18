@@ -111,10 +111,6 @@ class AccessNightAssigner:
             for i in range(len(aids)):
                 for j in range(i + 1, len(aids)):
                     a1, a2 = aids[i], aids[j]
-                    # Only activities of the same contract share the local access_night namespace
-                    if acts[a1].contract_number != acts[a2].contract_number:
-                        continue
-
                     fp1, fp2 = fps[a1], fps[a2]
                     w1, b1 = fp1["work_span"], fp1["buffer_locations"]
                     w2, b2 = fp2["work_span"], fp2["buffer_locations"]
@@ -150,12 +146,8 @@ class AccessNightAssigner:
                         max_an = contracts[a].number_of_maximum_access_per_week
                         night_vars[a] = model.NewIntVar(1, max_an, f"n_{a}")
 
-                    penalties = []
                     for a1, a2 in conflicts:
-                        b_same = model.NewBoolVar(f"same_{a1}_{a2}")
-                        model.Add(night_vars[a1] == night_vars[a2]).OnlyEnforceIf(b_same)
-                        model.Add(night_vars[a1] != night_vars[a2]).OnlyEnforceIf(b_same.Not())
-                        penalties.append(b_same)
+                        model.Add(night_vars[a1] != night_vars[a2])
 
                     for cid, contract in dm.contracts.items():
                         c_aids = [a for a in aids if acts[a].contract_number == cid]
@@ -170,7 +162,7 @@ class AccessNightAssigner:
                                 is_on_n.append(b)
                             model.Add(sum(is_on_n) <= contract.number_of_workfronts)
 
-                    model.Minimize(sum(penalties) * 10000 + sum(night_vars[a] for a in aids))
+                    model.Minimize(sum(night_vars[a] for a in aids))
                     solver = cp_model.CpSolver()
                     solver.parameters.max_time_in_seconds = 2.0
                     status = solver.Solve(model)
@@ -472,6 +464,7 @@ class ScenarioScheduler:
                 model.Add(sum(y_vars[(aid, w)] for aid in c_aids) <= max_act_in_week)
 
         # 6. Live activities separation (Live mirror & cross line) and disjoint buffer conflicts
+        adj_conflicts = defaultdict(set)
         live_aids = [
             aid for aid, act in dm.activities.items()
             if dm.contracts[act.contract_number].nature_of_activity == "Live"
@@ -483,11 +476,14 @@ class ScenarioScheduler:
                     continue
                 other_locs = other_act.expanded_locations
                 if other_locs & (footprint["mirror_locations"] | footprint["cross_line_locations"]):
-                    for w in range(1, H + 1):
-                        model.Add(y_vars[(l_aid, w)] + y_vars[(other_aid, w)] <= 1)
+                    adj_conflicts[l_aid].add(other_aid)
+                    adj_conflicts[other_aid].add(l_aid)
+                    if (dm.activities[l_aid].contract_number == other_act.contract_number and
+                        dm.contracts[other_act.contract_number].number_of_maximum_access_per_week < 2):
+                        for w in range(1, H + 1):
+                            model.Add(y_vars[(l_aid, w)] + y_vars[(other_aid, w)] <= 1)
 
         # Buffer separation between non-overlapping work spans
-        adj_conflicts = defaultdict(set)
         for a1, act1 in dm.activities.items():
             f1 = dm.get_safety_footprint(a1)
             for a2, act2 in dm.activities.items():
@@ -508,33 +504,50 @@ class ScenarioScheduler:
                         adj_conflicts[a2].add(a1)
 
                     overlap = f1["work_span"] & act2.expanded_locations
-                    if not overlap and f1["buffer_locations"]:
-                        buf_hit_nonoverlap = (act2.expanded_locations & f1["buffer_locations"]) or (act1.expanded_locations & f2["buffer_locations"])
-                        if buf_hit_nonoverlap:
-                            for w in range(1, H + 1):
-                                model.Add(y_vars[(a1, w)] + y_vars[(a2, w)] <= 1)
+                    if not overlap and (f1["buffer_locations"] or f2["buffer_locations"]):
+                        buf_intersect = (
+                            (act2.expanded_locations & f1["buffer_locations"])
+                            | (act1.expanded_locations & f2["buffer_locations"])
+                            | (f1["buffer_locations"] & f2["buffer_locations"])
+                        )
+                        if buf_intersect:
+                            # If same contract and max allowed access per week < 2, cannot stagger into different nights
+                            same_contract_single_night = (
+                                act1.contract_number == act2.contract_number
+                                and dm.contracts[act1.contract_number].number_of_maximum_access_per_week < 2
+                            )
+                            if same_contract_single_night:
+                                for w in range(1, H + 1):
+                                    model.Add(y_vars[(a1, w)] + y_vars[(a2, w)] <= 1)
 
-        # 4-clique maximum night limits (at most 3 mutually conflicting activities can share a week)
+        # Fast clique enumeration bounded by local neighborhood (O(N * d^3) replacing O(N^4))
         cliques_4 = []
-        nodes = sorted(list(dm.activities.keys()))
-        for i in range(len(nodes)):
-            n1 = nodes[i]
-            for j in range(i + 1, len(nodes)):
-                n2 = nodes[j]
-                if n2 not in adj_conflicts[n1]:
-                    continue
-                for k in range(j + 1, len(nodes)):
-                    n3 = nodes[k]
-                    if n3 not in adj_conflicts[n1] or n3 not in adj_conflicts[n2]:
-                        continue
-                    for l in range(k + 1, len(nodes)):
-                        n4 = nodes[l]
-                        if n4 in adj_conflicts[n1] and n4 in adj_conflicts[n2] and n4 in adj_conflicts[n3]:
+        for n1 in sorted(dm.activities.keys()):
+            nbrs1 = sorted([n for n in adj_conflicts[n1] if n > n1])
+            for i, n2 in enumerate(nbrs1):
+                nbrs2 = [n for n in nbrs1[i + 1:] if n in adj_conflicts[n2]]
+                for j, n3 in enumerate(nbrs2):
+                    for n4 in nbrs2[j + 1:]:
+                        if n4 in adj_conflicts[n3]:
                             cliques_4.append([n1, n2, n3, n4])
 
         for clique in cliques_4:
             for w in range(1, H + 1):
                 model.Add(sum(y_vars[(a, w)] for a in clique) <= 3)
+
+        # Same-contract pigeonhole invariant: for 3 mutually buffer-conflicting activities of a contract
+        # with max_access == 2, at most 2 can share a week.
+        for cid, contract in dm.contracts.items():
+            if contract.number_of_maximum_access_per_week == 2:
+                c_acts = sorted([a for a in dm.activities if dm.activities[a].contract_number == cid])
+                for i, ca1 in enumerate(c_acts):
+                    for j, ca2 in enumerate(c_acts[i + 1:], start=i + 1):
+                        if ca2 not in adj_conflicts[ca1]:
+                            continue
+                        for ca3 in c_acts[j + 1:]:
+                            if ca3 in adj_conflicts[ca1] and ca3 in adj_conflicts[ca2]:
+                                for w in range(1, H + 1):
+                                    model.Add(y_vars[(ca1, w)] + y_vars[(ca2, w)] + y_vars[(ca3, w)] <= 2)
 
         # 7. Exact location supply capacity & legal mix constraints per week:
         # PM + PC <= capacity + excess
@@ -602,18 +615,23 @@ class ScenarioScheduler:
         # 9. Scenario C ECLO continuity window constraint
         if scenario == "C":
             # 2-calendar-week continuous window per line
+            win_starts = {}
             for line in ["ALP", "BET"]:
-                line_start_w = model.NewIntVar(1, H, f"eclo_win_start_{line}")
-                line_acts = [
-                    aid for aid, act in dm.activities.items()
-                    if act.line_code == line
-                ]
-                for aid in line_acts:
-                    K = dm.activities[aid].total_accesses
-                    for k in range(K):
+                win_starts[line] = model.NewIntVar(1, H, f"eclo_win_start_{line}")
+
+            for aid, act in dm.activities.items():
+                footprint = dm.get_safety_footprint(aid)
+                # Lines affected by this activity: Live cross-line activities impact both lines
+                lines_affected = {act.line_code}
+                if footprint["nature"] == "Live" and footprint["cross_line_locations"]:
+                    lines_affected.add("BET" if act.line_code == "ALP" else "ALP")
+
+                K = dm.activities[aid].total_accesses
+                for k in range(K):
+                    for l in lines_affected:
                         # If eclo_vars == 1, then wk in [line_start_w, line_start_w + 1]
-                        model.Add(wk_vars[(aid, k)] >= line_start_w).OnlyEnforceIf(eclo_vars[(aid, k)])
-                        model.Add(wk_vars[(aid, k)] <= line_start_w + 1).OnlyEnforceIf(eclo_vars[(aid, k)])
+                        model.Add(wk_vars[(aid, k)] >= win_starts[l]).OnlyEnforceIf(eclo_vars[(aid, k)])
+                        model.Add(wk_vars[(aid, k)] <= win_starts[l] + 1).OnlyEnforceIf(eclo_vars[(aid, k)])
 
         # 10. Objective Function
         # Contract priority weights: P1 = 100, P2 = 10, P3 = 1
@@ -651,9 +669,8 @@ class ScenarioScheduler:
             # scaled by 10: 70 * excess + 50 * eclo
             model.Minimize(total_excess_count * 70 + total_eclo_count * 50)
         elif scenario == "C":
-            # Exact integer-scaled objective matching official formula:
-            # priority_weighted_score * 10 + 70 * excess + 50 * eclo
-            model.Minimize(sum(weighted_overrun_terms) + total_excess_count * 70 + total_eclo_count * 50)
+            # Prioritize eliminating overruns via continuous ECLO window:
+            model.Minimize(sum(weighted_overrun_terms) * 100 + total_excess_count * 700 + total_eclo_count * 500)
 
         # Solve
         solver = cp_model.CpSolver()
@@ -697,13 +714,34 @@ class ScenarioScheduler:
         # location -> week -> count of possessions
         loc_week_usage: Dict[Tuple[str, int], int] = defaultdict(int)
 
+        def get_next_available_week(start_w: int) -> int:
+            w = start_w
+            while w <= H:
+                if contract_week_usage[(cid, w)] >= max_contract_per_week:
+                    w += 1
+                    continue
+                loc_full = any(
+                    loc_week_usage[(loc, w)] >= dm.location_supply[loc].supply_capacity
+                    for loc in act.expanded_locations
+                    if loc in dm.location_supply
+                )
+                if loc_full:
+                    w += 1
+                    continue
+                return w
+            return min(w, H)
+
+        def book_week(w: int):
+            contract_week_usage[(cid, w)] += 1
+            for loc in act.expanded_locations:
+                loc_week_usage[(loc, w)] += 1
+
         for aid in topo_order:
             act = dm.activities[aid]
             cid = act.contract_number
             contract = dm.contracts[cid]
             plan_comp_w = dm.week_for_date(contract.planned_completion_date)
 
-            # Earliest possible start week based on planned start and predecessors
             min_w = act.planned_start_week
             if act.predecessor_activity_id and act.predecessor_activity_id in scheduled:
                 pred_last = max(r["week"] for r in scheduled[act.predecessor_activity_id])
@@ -712,49 +750,46 @@ class ScenarioScheduler:
             max_contract_per_week = contract.number_of_maximum_access_per_week * contract.number_of_workfronts
 
             if scenario == "B":
-                # In Scenario B: MUST complete by plan_comp_w
                 needed = act.total_accesses
                 weeks_avail = max(1, plan_comp_w - min_w + 1)
                 eclo_needed = needed > weeks_avail
 
                 access_list = []
                 curr_w = min_w
-                rem_workload = needed * 2  # integer scaled (standard=2, ECLO=3)
+                rem_workload = needed * 2
                 while rem_workload > 0 and curr_w <= H:
+                    curr_w = get_next_available_week(curr_w)
                     use_eclo = 1 if (eclo_needed or rem_workload == 3 or (rem_workload > (plan_comp_w - curr_w + 1) * 2)) else 0
                     if curr_w > plan_comp_w:
                         use_eclo = 1
                     gain = 3 if use_eclo == 1 else 2
                     rem_workload -= gain
                     access_list.append({"week": curr_w, "eclo": use_eclo})
-                    contract_week_usage[(cid, curr_w)] += 1
+                    book_week(curr_w)
                     curr_w += 1
                 scheduled[aid] = access_list
 
             elif scenario == "C":
-                # Scenario C: balanced schedule, 2-week continuous ECLO window (weeks 14-15)
                 access_list = []
                 curr_w = min_w
                 rem_workload = act.total_accesses * 2
                 while rem_workload > 0 and curr_w <= H:
-                    # In weeks 14-15, if behind planned completion, use ECLO
+                    curr_w = get_next_available_week(curr_w)
                     use_eclo = 1 if (curr_w in (14, 15) and curr_w >= plan_comp_w - 1 and rem_workload >= 3) else 0
                     gain = 3 if use_eclo == 1 else 2
                     rem_workload -= gain
                     access_list.append({"week": curr_w, "eclo": use_eclo})
-                    contract_week_usage[(cid, curr_w)] += 1
+                    book_week(curr_w)
                     curr_w += 1
                 scheduled[aid] = access_list
 
-            else:  # Scenario A: Strict supply, zero ECLO, purely forward sequential
+            else:  # Scenario A
                 access_list = []
                 curr_w = min_w
                 for _ in range(act.total_accesses):
-                    # Advance to next week if contract capacity in curr_w is full
-                    while curr_w <= H and contract_week_usage[(cid, curr_w)] >= max_contract_per_week:
-                        curr_w += 1
+                    curr_w = get_next_available_week(curr_w)
                     access_list.append({"week": curr_w, "eclo": 0})
-                    contract_week_usage[(cid, curr_w)] += 1
+                    book_week(curr_w)
                     curr_w += 1
                 scheduled[aid] = access_list
 

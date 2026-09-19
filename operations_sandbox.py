@@ -133,10 +133,16 @@ class SandboxManager:
         self.working_dm = copy.deepcopy(self.base_dm)
         self.ad_hoc_activities.clear()
         self.active_disruptions.clear()
+        self.replan_history.clear()
         scen_dir = os.path.join(self.baseline_results_dir, f"scenario_{self.active_scenario}")
         self.access_df = pd.read_csv(os.path.join(scen_dir, "SCHEDULE_ACCESS.csv"))
         self.occ_df = pd.read_csv(os.path.join(scen_dir, "SCHEDULE_OCCUPANCY.csv"))
         self.res_df = pd.read_csv(os.path.join(scen_dir, "RESULTS.csv"))
+
+    def reset_to_baseline(self) -> None:
+        """Alias for reset_working_state."""
+        self.reset_working_state()
+
 
     def validate_current_working_schedule(self) -> Dict[str, Any]:
         """Validates the current working schedule in memory without disk writing."""

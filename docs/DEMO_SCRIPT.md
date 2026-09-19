@@ -29,7 +29,7 @@
   3. The KPI cards, Delay Cost Breakdown, and Contract Milestone Progress bars update instantaneously.
 - **Narrator (Spoken):**
   > *"Every night between 1 AM and 4:30 AM, Singapore's railway network undergoes critical renewals. Every night is contested: multiple capital contracts compete for track access, bringing 750V live-rail traction cutoffs, rolling safety exclusion zones, and shared interchange tunnels.*  
-  > *Welcome to NebulaX RailWorks — an enterprise-grade decision support platform powered by Google OR-Tools CP-SAT, built specifically for LTA's Works Controllers and Reviewers to plan, prove, and dispatch track possessions with zero safety breaches."*
+  > *Welcome to NebulaX RailWorks — an enterprise-grade decision support platform, built specifically for LTA's Works Controllers and Reviewers to plan, prove, and dispatch track possessions with zero safety breaches."*
 
 ---
 

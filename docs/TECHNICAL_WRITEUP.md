@@ -191,14 +191,14 @@ The table below summarizes the official validation metrics produced by `validato
 
 | Scenario | Policy Description | Feasibility | Hard Violations | P1 / P2 Overrun | P3 Overrun | Excess Nights | ECLO Nights | Objective Score |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Scenario A** | Strict Supply, Zero Excess, No ECLO | **PASS (100%)** | **0** | **0 Days** | 28 Days | 0 | 0 | **32.2** |
-| **Scenario B** | Strict Deadlines, 100% On-Time | **PASS (100%)** | **0** | **0 Days** | **0 Days** | 0 | 6 | **30.0** |
-| **Scenario C** | Balanced Pareto Frontier, 2-Wk ECLO Window | **PASS (100%)** | **0** | **0 Days** | 14 Days | 0 | 2 | **26.1** |
+| **Scenario A** | Strict Supply, Zero Excess, No ECLO | **PASS (100%)** | **0** | **7 Days (P2)** | 35 Days | 0 | 0 | **608.3** |
+| **Scenario B** | Strict Deadlines, 100% On-Time | **PASS (100%)** | **0** | **0 Days** | **0 Days** | 0 | 10 | **50.0** |
+| **Scenario C** | Balanced Pareto Frontier, 2-Wk ECLO Window | **PASS (100%)** | **0** | **0 Days** | 21 Days | 0 | 6 | **122.4** |
 
 ### Benchmark Insights
-- **Flawless Priority Protection:** In Scenario A, despite rigid capacity limits, the solver absorbed all delays within low-priority contracts (C006, C010, C014), ensuring P1 and P2 achieved **zero overrun days**.
-- **Zero Excess Nights in Scenario B:** Rather than drawing on expensive additional access nights (costing 7x), the solver deployed targeted ECLO windows (costing 5x) to compress schedules, achieving on-time delivery across all 14 contracts at minimal cost.
-- **Pareto-Optimal Compromise in Scenario C:** Under Scenario C, the solver achieved the lowest objective score of all (**26.1**) by combining a 14-day P3 delay with exactly 2 ECLO nights packed into a single 2-week continuous window on Line Alpha, fully complying with Rule 10.
+- **100% Feasibility & Zero Hard Violations:** In Scenario A, the solver scheduled all 192 required accesses under strict supply limits with zero hard violations.
+- **Zero Overrun in Scenario B:** Rather than drawing on expensive additional access nights (costing 7x), the solver deployed targeted ECLO windows (costing 5x) to compress schedules, achieving on-time delivery across all 14 contracts with 0 days delay (Score: 50.0).
+- **Pareto-Optimal Compromise in Scenario C:** Under Scenario C, the solver achieved a balanced objective score of **122.4** by combining a 21-day P3 delay across 2 contracts with 6 ECLO nights packed into the allowed continuous window, fully complying with Rule 10.
 
 ---
 

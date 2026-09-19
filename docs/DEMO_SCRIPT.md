@@ -39,7 +39,7 @@ Total Narration Word Count: ~440 words (~150 words/minute — ideal, clear prese
   3. *[0:16 - 0:25]* Scroll smoothly to the **Contract Milestone Progress Tracker** and **Delay Penalty Breakdown**, pointing out that Priority 1 and Priority 2 contracts have **zero days of delay**.
 - **Spoken Narration (English):**
   > *"Every night between 1:00 and 4:30 AM, Singapore's railway network undergoes critical renewals. Multiple capital contracts compete for the same track possessions—demanding 750V live-rail traction cutoffs, rolling safety exclusion zones, and shared interchange tunnels.*  
-  > *Welcome to NebulaX RailWorks. In our Executive Control Room, planners instantly evaluate all three competition policies. Powered by Google OR-Tools CP-SAT, 100% of the baseline workload is delivered with zero hard safety breaches."*
+  > *Welcome to NebulaX RailWorks. In our Executive Control Room, planners instantly evaluate all three competition policies. 100% of the baseline workload is delivered with zero hard safety breaches."*
 - **中文旁白参考:**
   > “每晚 1 点到 4 点半，新加坡地铁必须在短短三个半小时内完成繁重的大修与更新。多项工程承包商同时争夺轨道资源，伴随着 750V 牵引断电、移动安全缓冲隔离与换乘区间闭锁。  
   > 欢迎来到 NebulaX RailWorks 决策控制中心。在总览控制室中，调度员可一键横跨 A、B、C 三种运营策略。在 Google OR-Tools CP-SAT 引擎驱动下，全量工单 100% 交付且零硬性安全违规。”

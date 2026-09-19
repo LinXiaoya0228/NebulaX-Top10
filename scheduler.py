@@ -664,15 +664,14 @@ class ScenarioScheduler:
             ov_w = overrun_wks[cid]
             p = contract.contract_priority
             tier_weight = 100 if p == 1 else (10 if p == 2 else 1)
-            # Find max possible nudge among activities
             c_acts = [dm.activities[a] for a in dm.activities if dm.activities[a].contract_number == cid]
-            max_nudge = max(
-                (0.3 if a.activity_priority == 1 else (0.2 if a.activity_priority == 2 else 0.0))
+            contract_mult = sum(
+                (1.3 if a.activity_priority == 1 else (1.2 if a.activity_priority == 2 else 1.0))
                 for a in c_acts
             )
-            # cost = 7 * tier_weight * (1 + max_nudge) * ov_w
-            # integer scaled by 10: 7 * tier_weight * int(10 + max_nudge * 10) // 10
-            unit_cost = int(round(7 * tier_weight * (1.0 + max_nudge) * 10))
+            # cost = 7 * tier_weight * contract_mult * ov_w
+            # integer scaled by 10:
+            unit_cost = int(round(7 * tier_weight * contract_mult * 10))
             weighted_overrun_terms.append(ov_w * unit_cost)
 
         total_eclo_count = sum(

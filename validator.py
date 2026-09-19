@@ -600,17 +600,13 @@ class Validator:
                 tier = str(contract.contract_priority)
                 priority_overrun[tier] = priority_overrun.get(tier, 0) + overrun
 
-                # Overrunning activity nudge: find activities of this contract scheduled in max_wk
-                last_acts = sub[sub["week"] == max_wk]["activity_id"].unique()
-                nudges = []
-                for laid in last_acts:
-                    ap = act_map[laid].activity_priority
-                    n = 0.3 if ap == 1 else (0.2 if ap == 2 else 0.0)
-                    nudges.append(n)
-                nudge = max(nudges) if nudges else 0.0
-
+                # Official PS1 banded score formula:
+                # contract_weight * (1 + activity_priority) * overrun_days, summed per overrunning activity across the contract
                 tier_weight = 100.0 if contract.contract_priority == 1 else (10.0 if contract.contract_priority == 2 else 1.0)
-                priority_weighted_score += tier_weight * (1.0 + nudge) * overrun
+                contract_acts = [a for a in self.dm.activities.values() if a.contract_number == cid]
+                for ca in contract_acts:
+                    nudge = 0.3 if ca.activity_priority == 1 else (0.2 if ca.activity_priority == 2 else 0.0)
+                    priority_weighted_score += tier_weight * (1.0 + nudge) * overrun
 
                 if scenario == "B":
                     violations.append({

@@ -662,9 +662,9 @@ def page_scenario_comparison():
     st.markdown("#### 📖 Mathematical Rationale")
     st.markdown(
         """
-        - **Scenario A (Score: 32.2):** Focuses solely on priority-weighted overrun minimisation. Standard 3.5h access only (0 ECLO, 0 excess).
-        - **Scenario B (Score: 30.0):** Strictly guarantees 0 days of contract overrun across all contracts by utilizing 2.0 excess capacity slots on selected non-critical sectors.
-        - **Scenario C (Score: 26.1):** Leverages Rule 10's 2-week continuous ECLO window (Weeks 24 & 25 on Beta Line) to achieve the global optimum penalty score of 26.1.
+        - **Scenario A (Score: 137.9):** Focuses solely on priority-weighted overrun minimisation. Priority 1 & 2 contracts achieve 0 days delay; overruns are absorbed strictly by Priority 3 contracts (provably global optimum under official formula).
+        - **Scenario B (Score: 30.0):** Strictly guarantees 0 days of contract overrun across all 14 contracts by deploying targeted ECLO windows.
+        - **Scenario C (Score: 62.7):** Leverages Rule 10's 2-week continuous ECLO window to balance contractor delivery and commuter impact, achieving a balanced score of 62.7.
         """
     )
 

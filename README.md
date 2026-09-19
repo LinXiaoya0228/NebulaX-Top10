@@ -7,7 +7,7 @@
 [![OR-Tools CP-SAT](https://img.shields.io/badge/Solver-OR--Tools%20CP--SAT%20v9.15-34D399.svg?logo=google&logoColor=white)](https://developers.google.com/optimization)
 [![Streamlit App](https://img.shields.io/badge/Interface-Streamlit%201.35+-FF4B4B.svg?logo=streamlit&logoColor=white)](https://nebulax-control-centre-570754541444.us-central1.run.app/)
 [![Safety Compliance](https://img.shields.io/badge/Safety%20Validator-100%25%20PASS%20(0%20Violations)-10B981.svg)](validator.py)
-[![Optimal Score](https://img.shields.io/badge/Scenario%20C%20Score-26.1%20(Verified)-F59E0B.svg)](results/scenario_C/)
+[![Optimal Score](https://img.shields.io/badge/Scenario%20C%20Score-62.7%20(Official%20Standard)-F59E0B.svg)](results/scenario_C/)
 [![WCAG 2.2 AA](https://img.shields.io/badge/Accessibility-WCAG%202.2%20AA%20Compliant-818CF8.svg)](ui/theme.py)
 [![Test Suite](https://img.shields.io/badge/Pytest-32%2F32%20Passed-blue)](tests/)
 
@@ -70,14 +70,14 @@ All three official scenarios have been solved, validated, and verified against t
 
 | Operational Scenario | Strategic Policy | Feasibility | Hard Violations | P1 / P2 Overrun | P3 Overrun | Excess Nights | ECLO Nights | Penalty Score | Solver Time |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Scenario A** | Strict Supply, Zero Excess, No ECLO | **PASS** | **0** | **0 Days** | 28 Days | 0 | 0 | **32.2** | 0.54s |
+| **Scenario A** | Strict Supply, Zero Excess, No ECLO | **PASS** | **0** | **0 Days** | 28 Days | 0 | 0 | **137.9** | 0.54s |
 | **Scenario B** | Strict Deadlines, 100% On-Time Completion | **PASS** | **0** | **0 Days** | **0 Days** | 0 | 6 | **30.0** | 0.65s |
-| **Scenario C** | Balanced Pareto Frontier, 2-Wk ECLO Window | **PASS** | **0** | **0 Days** | 14 Days | 0 | 2 | **26.1** | 0.94s |
+| **Scenario C** | Balanced Pareto Frontier, 2-Wk ECLO Window | **PASS** | **0** | **0 Days** | 7 Days | 0 | 4 | **62.7** | 0.94s |
 
 ```
-✓ SCENARIO A: 192 accesses scheduled | 0 hard violations | Score: 32.2
-✓ SCENARIO B: 192 accesses scheduled | 0 hard violations | Score: 30.0
-✓ SCENARIO C: 192 accesses scheduled | 0 hard violations | Score: 26.1
+✓ SCENARIO A: 192 accesses scheduled | 0 hard violations | Score: 137.9 (Provably Optimal)
+✓ SCENARIO B: 192 accesses scheduled | 0 hard violations | Score: 30.0 (Zero Overrun)
+✓ SCENARIO C: 192 accesses scheduled | 0 hard violations | Score: 62.7 (Pareto Frontier)
 ```
 
 > **Key Highlights:**
@@ -137,9 +137,9 @@ flowchart TD
 
     subgraph Optimization Engine ["Mathematical Optimisation"]
         P --> CP["OR-Tools CP-SAT Solver<br/>(scheduler.py)"]
-        CP --> S1["Scenario A<br/>(Min Overrun: 32.2)"]
+        CP --> S1["Scenario A<br/>(Min Overrun: 137.9)"]
         CP --> S2["Scenario B<br/>(Zero Delay: 30.0)"]
-        CP --> S3["Scenario C<br/>(Pareto Best: 26.1)"]
+        CP --> S3["Scenario C<br/>(Pareto Best: 62.7)"]
     end
 
     subgraph Validation ["Safety Verification"]

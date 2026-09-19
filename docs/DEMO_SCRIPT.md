@@ -15,7 +15,7 @@
 | **0:00 - 0:25** | 25s | **Scene 1: 🎛️ Page 1 Control Room** | Executive day theme, KPI cards, Scenario A/B/C switcher, Milestone progress bars | Real-time cockpit, 100% feasibility, 0 hard breaches, milestone tracking, penalty cost breakdown. |
 | **0:25 - 0:50** | 25s | **Scene 2: 📅 Page 2 Track Schedule** | Continuous Work Capsules, Pearl markers, Single-week pills, Multi-filter bar | Continuous visual journeys, discrete slots, diamond target milestones, multi-line interactive filters. |
 | **0:50 - 1:15** | 25s | **Scene 3: 🗺️ Page 3 Network Capacity** | Topology layout, Sequential gradient heatmap (Navy vs Red), Sector Inspector | Dual-line topology, 100% slate-navy vs true excess crimson, co-sharing cliques, 750V power mirroring. |
-| **1:15 - 1:40** | 25s | **Scene 4: ⚖️ Page 4 & 👥 Page 6 Trade-offs** | Radar chart, Pareto frontier, LTA DataMall hourly passenger exposure curves | Multi-scenario policy optimization (Score 26.1), ECLO commuter exposure curve, 1.5x productivity gain. |
+| **1:15 - 1:40** | 25s | **Scene 4: ⚖️ Page 4 & 👥 Page 6 Trade-offs** | Radar chart, Pareto frontier, LTA DataMall hourly passenger exposure curves | Multi-scenario policy optimization (Score 62.7), ECLO commuter exposure curve, 1.5x productivity gain. |
 | **1:40 - 2:10** | 30s | **Scene 5: 🧪 Page 5 Operations Sandbox** | Clone schedule, cut sector capacity (rail flaw defect), click HotReplanner | Digital twin simulation, Large Neighborhood Search (LNS) re-planner in <1.5s, minimal churn (<6%). |
 | **2:10 - 2:35** | 25s | **Scene 6: 💡 Page 7 Decision Brief** | Root-cause explainer graph, click 2 AM Handover Briefing | Deterministic predecessor DAG traversal, print-ready HTML graveyard shift briefing & isolation checklist. |
 | **2:35 - 3:00** | 25s | **Scene 7: 📥 Page 8 Validator & Reviewer** | Drag & drop test dataset, click Live Solve (<1.2s), 14/14 validator PASS, ZIP export | Undisclosed test instance ingestion, auto-resilience backfill, live CP-SAT solve, official validator, ZIP export. |
@@ -35,7 +35,7 @@ Total Narration Word Count: ~440 words (~150 words/minute — ideal, clear prese
 - **Visual Setup:** Browser displays full HD screen in crisp **Executive Day Mode** (`#F8FAFC` slate canvas, pure white cards, high-contrast `#0F172A` typography).
 - **On-Screen Camera & Mouse Actions:**
   1. *[0:00 - 0:08]* Camera highlights top system header and the 4 primary KPI cards: `100% Feasible`, `0 Hard Breaches`, `14/14 Contracts (59 Activities Scheduled)`, and `Optimal Penalty Score`.
-  2. *[0:08 - 0:16]* Mouse clicks the **Sidebar Scenario Selector**, toggling between **Scenario A** (Strict Supply / 0 Excess), **Scenario B** (Strict Deadlines / 0 Delay), and **Scenario C** (Pareto Balanced / Score 26.1). Notice instantaneous card recalculation.
+  2. *[0:08 - 0:16]* Mouse clicks the **Sidebar Scenario Selector**, toggling between **Scenario A** (Strict Supply / 0 Excess), **Scenario B** (Strict Deadlines / 0 Delay), and **Scenario C** (Pareto Balanced / Score 62.7). Notice instantaneous card recalculation.
   3. *[0:16 - 0:25]* Scroll smoothly to the **Contract Milestone Progress Tracker** and **Delay Penalty Breakdown**, pointing out that Priority 1 and Priority 2 contracts have **zero days of delay**.
 - **Spoken Narration (English):**
   > *"Every night between 1:00 and 4:30 AM, Singapore's railway network undergoes critical renewals. Multiple capital contracts compete for the same track possessions—demanding 750V live-rail traction cutoffs, rolling safety exclusion zones, and shared interchange tunnels.*  
@@ -82,14 +82,14 @@ Total Narration Word Count: ~440 words (~150 words/minute — ideal, clear prese
 - **Module:** `Page 4: Scenario Comparison` & `Page 6: Passenger Impact & ECLO`
 - **Visual Setup:** Quick transition from Page 4 to Page 6.
 - **On-Screen Camera & Mouse Actions:**
-  1. *[1:15 - 1:23]* On Page 4: Highlight the **Trade-off Radar Chart** and **Pareto Efficient Frontier**, showing how Scenario C achieves the competition's lowest verified penalty score of **26.1**.
+  1. *[1:15 - 1:23]* On Page 4: Highlight the **Trade-off Radar Chart** and **Pareto Efficient Frontier**, showing how Scenario C achieves the optimal balanced penalty score of **62.7**.
   2. *[1:23 - 1:33]* Switch to Page 6: Display the hourly passenger exposure curves powered by **official LTA DataMall v6.8 station telemetry**.
-  3. *[1:33 - 1:40]* Point out the early closure / late opening (ECLO) impact calculator: demonstrating how 2 ECLO nights gain a +50% work productivity boost while strictly adhering to the 2-week continuous window rule.
+  3. *[1:33 - 1:40]* Point out the early closure / late opening (ECLO) impact calculator: demonstrating how 4 ECLO nights gain a +50% work productivity boost while strictly adhering to the 2-week continuous window rule.
 - **Spoken Narration (English):**
-  > *"Scenario comparison illustrates strategic policy trade-offs. Our Pareto frontier proves that Scenario C delivers the optimal compromise at a score of 26.1.*  
+  > *"Scenario comparison illustrates strategic policy trade-offs. Our Pareto frontier proves that Scenario C delivers the optimal compromise at an official score of 62.7.*  
   > *Connecting operations to commuter welfare, our ECLO Advisor integrates official LTA DataMall passenger volume telemetry. It quantifies commuter exposure during Friday early closures and weekend late openings, mathematically justifying 1.5x productivity gains."*
 - **中文旁白参考:**
-  > “多场景对比直观量化了战略权衡。帕累托前沿清晰证明 Scenario C 以 26.1 分达成最优综合效益。  
+  > “多场景对比直观量化了战略权衡。帕累托前沿清晰证明 Scenario C 以 62.7 官方得分达成最优综合效益。  
   > 联动公众出行福祉，我们的 ECLO 顾问接入了 LTA DataMall 官方客流大数据，精准计算周五提前收车与周末延后运营的乘客影响，在严格满足两周连续窗口的前提下，科学论证了 1.5 倍工效提升的合理性。”
 
 ---

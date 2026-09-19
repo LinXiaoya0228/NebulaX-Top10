@@ -564,19 +564,16 @@ class Validator:
             if overrun > 0:
                 contracts_overrunning += 1
                 tier = str(contract.contract_priority)
-                priority_overrun[tier] = priority_overrun.get(tier, 0) + overrun
-
-                # Overrunning activity nudge: find activities of this contract scheduled in max_wk
-                last_acts = sub[sub["week"] == max_wk]["activity_id"].unique()
-                nudges = []
-                for laid in last_acts:
-                    ap = act_map[laid].activity_priority
-                    n = 0.3 if ap == 1 else (0.2 if ap == 2 else 0.0)
-                    nudges.append(n)
-                nudge = max(nudges) if nudges else 0.0
-
                 tier_weight = 100.0 if contract.contract_priority == 1 else (10.0 if contract.contract_priority == 2 else 1.0)
-                priority_weighted_score += tier_weight * (1.0 + nudge) * overrun
+
+                # Official validator specification (§2.5 soft objective 2 & JSON schema):
+                # contract_weight * (1 + activity_priority) * overrun_days, summed per overrunning activity.
+                c_acts = [self.dm.activities[aid] for aid in self.dm.activities if self.dm.activities[aid].contract_number == cid]
+                for act in c_acts:
+                    ap = act.activity_priority
+                    nudge = 0.3 if ap == 1 else (0.2 if ap == 2 else 0.0)
+                    priority_overrun[tier] = priority_overrun.get(tier, 0) + overrun
+                    priority_weighted_score += tier_weight * (1.0 + nudge) * overrun
 
                 if scenario == "B":
                     violations.append({

@@ -1,5 +1,4 @@
 # 🚇 NebulaX RailWorks: Dual-Line Railway Track Access Control Centre (TAC-C)
-### Industrial Decision Support & Mathematical CP-SAT Scheduling for Singapore's MRT Network
 **LTA NebulaX 2026 Hackathon — Problem Statement 1 (PS1: Railway Track Access Optimisation)**
 
 [![Hosted Live Web App](https://img.shields.io/badge/Hosted%20Live%20App-Cloud%20Run%20(Online)-2563EB.svg?logo=googlecloud&logoColor=white)](https://nebulax-control-centre-570754541444.us-central1.run.app/)
@@ -58,7 +57,7 @@ Between midnight passenger shutdown and 05:00 morning train launch, Singapore's 
 > **Live Web Application:** [https://nebulax-control-centre-570754541444.us-central1.run.app/](https://nebulax-control-centre-570754541444.us-central1.run.app/)  
 > You can evaluate any undisclosed benchmark dataset live in the web application without command-line execution:
 > - **Sidebar Switcher**: Select **`📤 Upload Custom Instance (CSVs / ZIP)`** under *Dataset & Instance* in the left navigation drawer.
-> - **Dedicated Evaluation Console**: On **Page 8 (`Validator & Downloads`)**, expand the **Reviewer / Judge Live Evaluation Panel**.
+> - **Dedicated Evaluation Console**: On **`Validator & Downloads`**, expand the **Reviewer / Judge Live Evaluation Panel**.
 > - **Instant Automatic Resilience**: Upload all 8 CSVs or a single `.zip` file. If only work demand files (`07` & `08`) are uploaded, the system automatically backfills standard dual-line network topology files (`01` through `06`).
 > - **Live CP-SAT Execution (<1.5s)**: Click **`🚀 Run Live Optimization & Validation`** to solve live on-screen, trigger the official 14-rule mathematical validator, and export a ready-to-submit `submission.zip` package with 1 click.
 

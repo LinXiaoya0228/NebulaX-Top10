@@ -364,12 +364,18 @@ class DataMall:
             for b in range(1, buf_sectors_count + 1):
                 idx = min_i - b
                 if 0 <= idx < len(line_secs):
-                    buffer_locations.add(f"{line_secs[idx].sector_id}:{bound}")
+                    sec = line_secs[idx]
+                    buffer_locations.add(f"{sec.sector_id}:{bound}")
+                    buffer_locations.add(f"PLAT:{line}:{sec.from_station_id}:{bound}")
+                    buffer_locations.add(f"PLAT:{line}:{sec.to_station_id}:{bound}")
             # downstream buffer
             for b in range(1, buf_sectors_count + 1):
                 idx = max_i + b
                 if 0 <= idx < len(line_secs):
-                    buffer_locations.add(f"{line_secs[idx].sector_id}:{bound}")
+                    sec = line_secs[idx]
+                    buffer_locations.add(f"{sec.sector_id}:{bound}")
+                    buffer_locations.add(f"PLAT:{line}:{sec.from_station_id}:{bound}")
+                    buffer_locations.add(f"PLAT:{line}:{sec.to_station_id}:{bound}")
 
         # 2. Opposite bound mirroring (only for Live)
         if opp_mirror:
@@ -388,10 +394,20 @@ class DataMall:
             )
             if touches_interchange:
                 other_line = "BET" if line == "ALP" else "ALP"
+                o_secs = self.sectors[other_line]
+                h_idx = next((i for i, s in enumerate(o_secs) if "H01_H02" in s.sector_id), -1)
                 for b in ["EB", "WB"]:
                     cross_line_locations.add(f"SEC:{other_line}:H01_H02:{b}")
                     cross_line_locations.add(f"PLAT:{other_line}:H01:{b}")
                     cross_line_locations.add(f"PLAT:{other_line}:H02:{b}")
+                    if h_idx >= 0:
+                        for b_offset in (-2, -1, 1, 2):
+                            b_idx = h_idx + b_offset
+                            if 0 <= b_idx < len(o_secs):
+                                sec = o_secs[b_idx]
+                                cross_line_locations.add(f"{sec.sector_id}:{b}")
+                                cross_line_locations.add(f"PLAT:{other_line}:{sec.from_station_id}:{b}")
+                                cross_line_locations.add(f"PLAT:{other_line}:{sec.to_station_id}:{b}")
 
         total_closure = work_span | buffer_locations | mirror_locations | cross_line_locations
 

@@ -388,7 +388,41 @@ class Validator:
                         })
 
         if strict_buffers:
-            # 3. Night-level closures, buffer intrusion, and buffer overlaps (Rule 4 & Rule 6)
+            # 3. Cross-group closure zone intrusion check (Rule 4, 5, 6 - Official Mechanical Validator)
+            for wk, g in occ_df.groupby("week"):
+                group_acts = defaultdict(set)
+                act_locs = defaultdict(set)
+                for _, r in g.iterrows():
+                    group_acts[r["co_share_group"]].add(r["activity_id"])
+                    act_locs[r["activity_id"]].add(r["location_id"])
+
+                group_closure = {}
+                for grp, aids in group_acts.items():
+                    c_set = set()
+                    for a in aids:
+                        if a in self.dm.activities:
+                            c_set |= self.dm.get_safety_footprint(a)["total_closure"]
+                    group_closure[grp] = c_set
+
+                for g1, closure in group_closure.items():
+                    for g2, aids2 in group_acts.items():
+                        if g1 == g2:
+                            continue
+                        for a2 in aids2:
+                            hits = act_locs[a2] & closure
+                            if hits:
+                                acts_in_g1 = sorted([
+                                    a for a in group_acts[g1]
+                                    if a != a2 and a in self.dm.activities and act_locs[a2] & self.dm.get_safety_footprint(a)["total_closure"]
+                                ])
+                                if acts_in_g1:
+                                    violations.append({
+                                        "rule": "closure",
+                                        "severity": "hard",
+                                        "detail": f"[Activity inside another group's closure zone] wk{wk}: {a2} inside closure of {acts_in_g1} at {sorted(list(hits))}",
+                                    })
+
+            # 4. Night-level closures, buffer intrusion, and buffer overlaps (Rule 4 & Rule 6)
             # Checked within each local accounting scope: (contract_number, access_type, week, access_night).
             # Different contracts have independent access_night counters; possession grouping across contracts
             # is governed by (location_id, week, co_share_group).

@@ -472,19 +472,38 @@ class ScenarioScheduler:
                 model.Add(sum(y_vars[(aid, w)] for aid in c_aids) <= max_act_in_week)
 
         # 6. Live activities separation (Live mirror & cross line) and disjoint buffer conflicts
+        # 6. Live activities separation (Live mirror, cross-line, and buffer closures)
         live_aids = [
             aid for aid, act in dm.activities.items()
             if dm.contracts[act.contract_number].nature_of_activity == "Live"
         ]
         for l_aid in live_aids:
             footprint = dm.get_safety_footprint(l_aid)
+            l_closure = footprint["total_closure"]
             for other_aid, other_act in dm.activities.items():
                 if other_aid == l_aid:
                     continue
-                other_locs = other_act.expanded_locations
-                if other_locs & (footprint["mirror_locations"] | footprint["cross_line_locations"]):
+                if other_act.expanded_locations & l_closure:
                     for w in range(1, H + 1):
                         model.Add(y_vars[(l_aid, w)] + y_vars[(other_aid, w)] <= 1)
+
+        # Incompatible non-co-shareable activities with intersecting closure zones
+        # (Both PC, or PM with any activity: cannot legally share possession or co_share_group)
+        fps = {aid: dm.get_safety_footprint(aid) for aid in dm.activities}
+        for a1, act1 in dm.activities.items():
+            t1 = dm.contracts[act1.contract_number].access_type
+            f1 = fps[a1]
+            for a2, act2 in dm.activities.items():
+                if a1 >= a2:
+                    continue
+                t2 = dm.contracts[act2.contract_number].access_type
+                if (t1 == "PC" and t2 == "PC") or t1 == "PM" or t2 == "PM":
+                    f2 = fps[a2]
+                    hit1 = f1["work_span"] & (f2["work_span"] | f2["buffer_locations"])
+                    hit2 = f2["work_span"] & (f1["work_span"] | f1["buffer_locations"])
+                    if hit1 or hit2:
+                        for w in range(1, H + 1):
+                            model.Add(y_vars[(a1, w)] + y_vars[(a2, w)] <= 1)
 
         # Buffer separation between non-overlapping work spans
         adj_conflicts = defaultdict(set)
@@ -514,27 +533,47 @@ class ScenarioScheduler:
                             for w in range(1, H + 1):
                                 model.Add(y_vars[(a1, w)] + y_vars[(a2, w)] <= 1)
 
-        # 4-clique maximum night limits (at most 3 mutually conflicting activities can share a week)
-        cliques_4 = []
-        nodes = sorted(list(dm.activities.keys()))
-        for i in range(len(nodes)):
-            n1 = nodes[i]
-            for j in range(i + 1, len(nodes)):
-                n2 = nodes[j]
-                if n2 not in adj_conflicts[n1]:
-                    continue
-                for k in range(j + 1, len(nodes)):
-                    n3 = nodes[k]
-                    if n3 not in adj_conflicts[n1] or n3 not in adj_conflicts[n2]:
-                        continue
-                    for l in range(k + 1, len(nodes)):
-                        n4 = nodes[l]
-                        if n4 in adj_conflicts[n1] and n4 in adj_conflicts[n2] and n4 in adj_conflicts[n3]:
-                            cliques_4.append([n1, n2, n3, n4])
+        # Maximal conflict cliques on each line and bound:
+        # Any set of activities whose closure zones mutually intersect can form at most ONE possession (<= 4 activities, <= 1 PC, <= 0 PM if mixed)
+        line_bounds = [("ALP", "EB"), ("ALP", "WB"), ("BET", "EB"), ("BET", "WB")]
+        all_cliques = []
+        for lb in line_bounds:
+            line, bound = lb
+            acts = [a for a, act in dm.activities.items() if act.line_code == line and act.bound == bound]
+            adj = {a: set() for a in acts}
+            for i in range(len(acts)):
+                for j in range(i + 1, len(acts)):
+                    a1, a2 = acts[i], acts[j]
+                    c1 = fps[a1]["total_closure"]
+                    c2 = fps[a2]["total_closure"]
+                    l1 = dm.activities[a1].expanded_locations
+                    l2 = dm.activities[a2].expanded_locations
+                    if (l1 & c2) or (l2 & c1):
+                        adj[a1].add(a2)
+                        adj[a2].add(a1)
 
-        for clique in cliques_4:
+            cliques = []
+            def bron_kerbosch(r, p, x):
+                if not p and not x:
+                    cliques.append(r)
+                    return
+                for v in list(p):
+                    bron_kerbosch(r | {v}, p & adj[v], x & adj[v])
+                    p.remove(v)
+                    x.add(v)
+
+            bron_kerbosch(set(), set(acts), set())
+            for c in cliques:
+                if len(c) > 1:
+                    all_cliques.append(c)
+
+        for clique in all_cliques:
+            pm_a = [a for a in clique if dm.contracts[dm.activities[a].contract_number].access_type == "PM"]
+            pc_a = [a for a in clique if dm.contracts[dm.activities[a].contract_number].access_type == "PC"]
+            c_a = [a for a in clique if dm.contracts[dm.activities[a].contract_number].access_type == "C"]
             for w in range(1, H + 1):
-                model.Add(sum(y_vars[(a, w)] for a in clique) <= 3)
+                model.Add(sum(y_vars[(a, w)] for a in pc_a) <= 1)
+                model.Add(4 * sum(y_vars[(a, w)] for a in pm_a) + sum(y_vars[(a, w)] for a in pc_a) + sum(y_vars[(a, w)] for a in c_a) <= 4)
 
         # 7. Exact location supply capacity & legal mix constraints per week:
         # PM + PC <= capacity + excess

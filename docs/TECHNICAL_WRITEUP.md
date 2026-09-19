@@ -1,7 +1,8 @@
 # 🚆 Technical Write-Up: Autonomous Dual-Line Railway Track Access Optimisation
 ### High-Performance Mathematical Formulation, CP-SAT Solvers, and Industrial Decision Support for Singapore's MRT Network
-**Team:** NebulaX Top-10  
+**Team:** NebulaX Top-10 (Lin Xiaoya, Wang Siwen, Wu Yiqian)  
 **Challenge:** LTA NebulaX 2026 Hackathon — Problem Statement 1 (Railway Track Access Optimisation)  
+**Hosted Live Web App:** [https://nebulax-control-centre-570754541444.us-central1.run.app/](https://nebulax-control-centre-570754541444.us-central1.run.app/)  
 **Submission Artifacts:** Feasible Schedules for Scenarios A, B, and C with 0 Hard Violations Verified Mechanically  
 
 ---
@@ -232,4 +233,13 @@ Designed for evaluating undisclosed instances:
 ## 6. Conclusion
 
 The NebulaX RailWorks Suite bridges the gap between theoretical mathematical optimization and daily railway operational reality. By combining exact CP-SAT solvers with domain-rich visualizations, digital twin sandboxing, and automated shift reporting, it empowers LTA and rail operators to maximize track maintenance productivity while guaranteeing physical safety and passenger service reliability.
+
+---
+
+## 7. Acknowledgments
+
+The authors gratefully acknowledge:
+- **Land Transport Authority (LTA) Singapore** for formulating Problem Statement 1, establishing realistic Singapore MRT network constraints, providing comprehensive data schemas, and supporting innovation in digital railway operations.
+- **National University of Singapore (NUS)** for academic guidance, foundational expertise in operations research and combinatorial optimization, and computational resources.
+
 

@@ -2,37 +2,41 @@
 ### Industrial Decision Support & Mathematical CP-SAT Scheduling for Singapore's MRT Network
 **LTA NebulaX 2026 Hackathon — Problem Statement 1 (PS1: Railway Track Access Optimisation)**
 
+[![Hosted Live Web App](https://img.shields.io/badge/Hosted%20Live%20App-Cloud%20Run%20(Online)-2563EB.svg?logo=googlecloud&logoColor=white)](https://nebulax-control-centre-570754541444.us-central1.run.app/)
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11+-38BDF8.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![OR-Tools CP-SAT](https://img.shields.io/badge/Solver-OR--Tools%20CP--SAT%20v9.15-34D399.svg?logo=google&logoColor=white)](https://developers.google.com/optimization)
-[![Streamlit App](https://img.shields.io/badge/Interface-Streamlit%201.64+-FF4B4B.svg?logo=streamlit&logoColor=white)](https://streamlit.io/)
+[![Streamlit App](https://img.shields.io/badge/Interface-Streamlit%201.35+-FF4B4B.svg?logo=streamlit&logoColor=white)](https://nebulax-control-centre-570754541444.us-central1.run.app/)
 [![Safety Compliance](https://img.shields.io/badge/Safety%20Validator-100%25%20PASS%20(0%20Violations)-10B981.svg)](validator.py)
 [![Optimal Score](https://img.shields.io/badge/Scenario%20C%20Score-26.1%20(Verified)-F59E0B.svg)](results/scenario_C/)
 [![WCAG 2.2 AA](https://img.shields.io/badge/Accessibility-WCAG%202.2%20AA%20Compliant-818CF8.svg)](ui/theme.py)
 [![Test Suite](https://img.shields.io/badge/Pytest-32%2F32%20Passed-blue)](tests/)
 
+> 🌐 **Hosted Live Web App URL:** [https://nebulax-control-centre-570754541444.us-central1.run.app/](https://nebulax-control-centre-570754541444.us-central1.run.app/)  
+> *Cloud Run Production Deployment — The judging panel can access the running digital twin 24/7 to upload undisclosed test instances (the 8 CSV files or .ZIP), execute CP-SAT scheduling live (<1.5s), inspect interactive track heatmaps, and validate logic against 14 hard safety constraints.*
+
 ---
 
 ## 📋 Table of Contents
 
-- [Executive Summary](#-executive-summary)
-- [For Hackathon Reviewers & Judges: Live Evaluation](#-for-hackathon-reviewers--judges-live-evaluation)
-- [Official Verified Scoreboard](#-official-verified-scoreboard)
-- [Safety Rules & Constraint Formulation](#-safety-rules--constraint-formulation)
-- [System Architecture](#-system-architecture)
-- [Interactive Web Dashboard Tour (8 Modules)](#-interactive-web-dashboard-tour-8-modules)
-- [Reviewer / Judge Live Evaluation Guide](#-reviewer--judge-live-evaluation-guide)
-- [Engineering Highlights & "Little Touches"](#-engineering-highlights--little-touches)
-- [Installation & Quickstart](#-installation--quickstart)
-- [CLI Tooling & Validation](#-cli-tooling--validation)
-- [Test Suite & Quality Assurance](#-test-suite--quality-assurance)
-- [Repository Structure](#-repository-structure)
-- [Deliverables Summary](#-deliverables-summary)
-- [Design System & Accessibility](#-design-system--accessibility)
-- [Authors & Acknowledgments](#-authors--acknowledgments)
+- [Executive Summary](#executive-summary)
+- [For Hackathon Reviewers & Judges: Live Evaluation](#live-evaluation)
+- [Official Verified Scoreboard](#official-verified-scoreboard)
+- [Safety Rules & Constraint Formulation](#safety-rules--constraint-formulation)
+- [System Architecture](#system-architecture)
+- [Interactive Web Dashboard Tour (8 Modules)](#interactive-web-dashboard-tour-8-modules)
+- [Reviewer / Judge Live Evaluation Guide](#reviewer--judge-live-evaluation-guide)
+- [Engineering Highlights & "Little Touches"](#engineering-highlights--little-touches)
+- [Installation & Quickstart](#installation--quickstart)
+- [CLI Tooling & Validation](#cli-tooling--validation)
+- [Test Suite & Quality Assurance](#test-suite--quality-assurance)
+- [Repository Structure](#repository-structure)
+- [Deliverables Summary](#deliverables-summary)
+- [Design System & Accessibility](#design-system--accessibility)
+- [Authors & Acknowledgments](#authors--acknowledgments)
 
 ---
 
-## 🎯 Executive Summary
+## <a id="executive-summary"></a>🎯 Executive Summary
 
 Between midnight passenger shutdown and 05:00 morning train launch, Singapore's railway network undergoes critical physical renewals, signaling modifications, tamping, and inspections. Every night is contested: multiple capital contracts compete for the same tunnel and platform sectors, each bringing rolling exclusion safety buffers, 750V DC live-rail traction cutoffs, and strict completion deadlines.
 
@@ -50,7 +54,8 @@ Between midnight passenger shutdown and 05:00 morning train launch, Singapore's 
 ---
 
 > [!TIP]
-> ### 🕹️ For Hackathon Reviewers & Judges: Live Evaluation & Custom Instance Ingestion
+> ### <a id="live-evaluation"></a>🕹️ For Hackathon Reviewers & Judges: Live Evaluation & Custom Instance Ingestion
+> **Live Web Application:** [https://nebulax-control-centre-570754541444.us-central1.run.app/](https://nebulax-control-centre-570754541444.us-central1.run.app/)  
 > You can evaluate any undisclosed benchmark dataset live in the web application without command-line execution:
 > - **Sidebar Switcher**: Select **`📤 Upload Custom Instance (CSVs / ZIP)`** under *Dataset & Instance* in the left navigation drawer.
 > - **Dedicated Evaluation Console**: On **Page 8 (`Validator & Downloads`)**, expand the **Reviewer / Judge Live Evaluation Panel**.
@@ -59,7 +64,7 @@ Between midnight passenger shutdown and 05:00 morning train launch, Singapore's 
 
 ---
 
-## 🏆 Official Verified Scoreboard
+## <a id="official-verified-scoreboard"></a>🏆 Official Verified Scoreboard
 
 All three official scenarios have been solved, validated, and verified against the official competition validator with **zero hard rule violations**:
 
@@ -82,7 +87,7 @@ All three official scenarios have been solved, validated, and verified against t
 
 ---
 
-## 🛡️ Safety Rules & Constraint Formulation
+## <a id="safety-rules--constraint-formulation"></a>🛡️ Safety Rules & Constraint Formulation
 
 The mathematical model strictly enforces all core physical and operational rules defined in PS1:
 
@@ -122,7 +127,7 @@ The mathematical model strictly enforces all core physical and operational rules
 
 ---
 
-## 🏗️ System Architecture
+## <a id="system-architecture"></a>🏗️ System Architecture
 
 ```mermaid
 flowchart TD
@@ -157,7 +162,7 @@ flowchart TD
 
 ---
 
-## 📸 Interactive Web Dashboard Tour (8 Modules)
+## <a id="interactive-web-dashboard-tour-8-modules"></a>📸 Interactive Web Dashboard Tour (8 Modules)
 
 The platform is organized into three operational divisions across **8 dedicated pages**:
 
@@ -225,7 +230,7 @@ NebulaX RailWorks Suite
 
 ---
 
-## 🔍 Reviewer / Judge Live Evaluation Guide
+## <a id="reviewer--judge-live-evaluation-guide"></a>🔍 Reviewer / Judge Live Evaluation Guide
 
 The platform provides a dedicated panel on **Page 8 (`Validator & Downloads`)** and the **Sidebar** for evaluating undisclosed test instances:
 
@@ -240,7 +245,7 @@ The platform provides a dedicated panel on **Page 8 (`Validator & Downloads`)** 
 
 ---
 
-## 💡 Engineering Highlights & "Little Touches"
+## <a id="engineering-highlights--little-touches"></a>💡 Engineering Highlights & "Little Touches"
 
 1. **Executive Sequential Gradient (No More "Sea of Red"):**
    Traditional tools color 100% capacity red, causing every busy sector in a 20-week schedule to look like an emergency. Our capacity heatmap uses an executive blue-to-navy sequential ramp, where 100% full capacity is rendered in deep Slate Navy (`#1E293B`), reserving alarm crimson strictly for true illegal over-capacity (>100%).
@@ -259,7 +264,7 @@ The platform provides a dedicated panel on **Page 8 (`Validator & Downloads`)** 
 
 ---
 
-## 🛠️ Installation & Quickstart
+## <a id="installation--quickstart"></a>🛠️ Installation & Quickstart
 
 ### Prerequisites
 - Python 3.10, 3.11, or 3.12
@@ -309,7 +314,7 @@ python validator.py --data-dir PS1/01_data --results-dir results/scenario_A --sc
 
 ---
 
-## 💻 CLI Tooling & Validation
+## <a id="cli-tooling--validation"></a>💻 CLI Tooling & Validation
 
 The platform includes standalone CLI tools for headless execution, automated pipeline integration, and validation:
 
@@ -333,7 +338,7 @@ python validator.py --all
 
 ---
 
-## 🧪 Test Suite & Quality Assurance
+## <a id="test-suite--quality-assurance"></a>🧪 Test Suite & Quality Assurance
 
 The codebase includes comprehensive automated smoke and unit tests:
 
@@ -349,7 +354,7 @@ pytest tests/ -v
 
 ---
 
-## 📁 Repository Structure
+## <a id="repository-structure"></a>📁 Repository Structure
 
 ```
 NebulaX-Top10/
@@ -393,17 +398,18 @@ NebulaX-Top10/
 
 ---
 
-## 📄 Deliverables Summary
+## <a id="deliverables-summary"></a>📄 Deliverables Summary
 
-1. **Public Test Results:** Pre-computed, 100% feasible schedule packages for Scenarios A, B, and C in `results/scenario_{A,B,C}/`.
-2. **Interactive Web App:** Multi-page dashboard with dynamic solver, reviewer upload panel, and digital twin sandbox (`app.py`).
-3. **3-Minute Video Demo Script:** Comprehensive timestamped walkthrough and storyboard (`docs/DEMO_SCRIPT.md`).
-4. **Methodology Write-Up:** Complete mathematical formulation, constraint proofs, and benchmark analysis (`docs/TECHNICAL_WRITEUP.md`).
-5. **Full Source Code:** Fully tested, PEP-8 compliant Python codebase with 32 automated tests.
+1. **Hosted Live Web App URL:** Production-grade Cloud Run web application live 24/7 at [https://nebulax-control-centre-570754541444.us-central1.run.app/](https://nebulax-control-centre-570754541444.us-central1.run.app/) where the judging panel can upload undisclosed test instances (the 8 CSV files or .ZIP) into the UI to run the scheduler live (<1.5s), visualize results, and validate all 14 hard safety constraints.
+2. **Public Test Results:** Pre-computed, 100% feasible schedule packages for Scenarios A, B, and C in `results/scenario_{A,B,C}/`.
+3. **Interactive Web App Codebase:** Multi-page dashboard with dynamic solver, reviewer upload panel, and digital twin sandbox (`app.py`).
+4. **3-Minute Video Demo Script:** Comprehensive timestamped walkthrough and storyboard (`docs/DEMO_SCRIPT.md`).
+5. **Methodology Write-Up:** Complete mathematical formulation, constraint proofs, and benchmark analysis (`docs/TECHNICAL_WRITEUP.md`).
+6. **Full Source Code:** Fully tested, PEP-8 compliant Python codebase with 32 automated tests.
 
 ---
 
-## 🎨 Design System & Accessibility
+## <a id="design-system--accessibility"></a>🎨 Design System & Accessibility
 
 The interface is engineered according to **WCAG 2.2 AA Accessibility Standards** and control-room human factor guidelines:
 - **Executive Daylight Palette**: Clean canvas (`#F8FAFC`, `#FFFFFF`) with crisp high-contrast typography (`#0F172A`).
@@ -413,8 +419,10 @@ The interface is engineered according to **WCAG 2.2 AA Accessibility Standards**
 
 ---
 
-## 👥 Authors & Acknowledgments
+## <a id="authors--acknowledgments"></a>👥 Authors & Acknowledgments
 
 - **Team:** NebulaX Top-10 (Lin Xiaoya, Wang Siwen, Wu Yiqian)
 - **Competition:** LTA NebulaX 2026 Hackathon
-- **Special Thanks:** Land Transport Authority (LTA) Singapore for the comprehensive problem formulation, real-world data schemas, and rigorous validator suite.
+- **Special Thanks:**
+  - **Land Transport Authority (LTA) Singapore** for organizing the NebulaX Hackathon, framing the critical real-world railway track access challenge, providing authentic Singapore MRT operational data schemas, and defining the rigorous safety validation criteria.
+  - **National University of Singapore (NUS)** for academic guidance, foundational support in operations research and combinatorial optimization, and computational resources.
